@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -17,10 +17,9 @@ package software.amazon.smithy.cli.commands;
 
 import static java.lang.String.format;
 
-import java.util.Set;
-import java.util.function.Consumer;
-import software.amazon.smithy.cli.Cli;
 import software.amazon.smithy.cli.CliError;
+import software.amazon.smithy.cli.CliPrinter;
+import software.amazon.smithy.cli.Style;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.validation.Severity;
 import software.amazon.smithy.model.validation.ValidatedResult;
@@ -32,40 +31,35 @@ final class Validator {
 
     private Validator() {}
 
-    /**
-     * Validation features.
-     */
-    enum Feature {
-        /** Shows validation events, but does not show the summary. */
-        QUIET,
-
-        /** Writes validation events to STDOUT instead of stderr. */
-        STDOUT
-    }
-
-    static void validate(ValidatedResult<Model> result, Set<Feature> features) {
-        boolean quiet = features.contains(Feature.QUIET);
-        boolean stdout = features.contains(Feature.STDOUT);
-        Consumer<CharSequence> writer = stdout ? Cli.getStdout() : Cli.getStderr();
-
+    static void validate(boolean quiet, CliPrinter printer, ValidatedResult<Model> result) {
         long errors = result.getValidationEvents(Severity.ERROR).size();
         long dangers = result.getValidationEvents(Severity.DANGER).size();
 
         if (!quiet) {
-            String line = format(
-                    "Validation result: %s ERROR(s), %d DANGER(s), %d WARNING(s), %d NOTE(s)",
-                    errors, dangers, result.getValidationEvents(Severity.WARNING).size(),
-                    result.getValidationEvents(Severity.NOTE).size());
-            writer.accept(line);
-
-            result.getResult().ifPresent(model -> {
-                writer.accept(String.format("Validated %d shapes in model", model.shapes().count()));
-            });
+            int warnings = result.getValidationEvents(Severity.WARNING).size();
+            int notes = result.getValidationEvents(Severity.NOTE).size();
+            long shapeCount = result.getResult().isPresent() ? result.getResult().get().shapes().count() : 0;
+            printer.println(format(
+                    "Validation result for %d shapes: %s, %s, %s, %s",
+                    shapeCount,
+                    styledText(printer, "ERROR: ", errors, Style.BRIGHT_RED),
+                    styledText(printer, "DANGER: ", dangers, Style.RED),
+                    styledText(printer, "WARNING: ", warnings, Style.YELLOW),
+                    styledText(printer, "NOTE: ", notes, Style.WHITE)));
         }
 
         if (!result.getResult().isPresent() || errors + dangers > 0) {
             // Show the error and danger severity events.
             throw new CliError(format("The model is invalid: %s ERROR(s), %d DANGER(s)", errors, dangers));
+        }
+    }
+
+    private static String styledText(CliPrinter printer, String label, long count, Style style) {
+        String result = label + count;
+        if (count == 0) {
+            return printer.style(result, Style.GREEN);
+        } else {
+            return printer.style(result, style);
         }
     }
 }
