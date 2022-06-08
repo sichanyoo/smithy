@@ -1,8 +1,24 @@
+/*
+ * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
+ *
+ *  http://aws.amazon.com/apache2.0
+ *
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
 package software.amazon.smithy.openapi.model;
 
 import java.util.Map;
 import java.util.Optional;
-import software.amazon.smithy.model.node.*;
+import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.utils.SmithyBuilder;
 import software.amazon.smithy.utils.ToSmithyBuilder;
 
@@ -20,13 +36,26 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
         this.externalValue = builder.externalValue;
     }
 
-    public static Builder builder() { return new Builder(); }
+    public static Builder builder() {
+        return new Builder();
+    }
 
     // getters
-    public String getSummary() { return summary; }
-    public Optional<String> getDescription() { return Optional.ofNullable(description); }
-    public Optional<Map<String, Node>> getValue() { return Optional.ofNullable(value); }
-    public Optional<String> getExternalValue() { return Optional.ofNullable(externalValue); }
+    public String getSummary() {
+        return summary;
+    }
+
+    public Optional<String> getDescription() {
+        return Optional.ofNullable(description);
+    }
+
+    public Optional<Map<String, Node>> getValue() {
+        return Optional.ofNullable(value);
+    }
+
+    public Optional<String> getExternalValue() {
+        return Optional.ofNullable(externalValue);
+    }
 
     @Override
     public Builder toBuilder() {
@@ -66,18 +95,20 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
             this.summary = summary;
             return this;
         }
+
         public Builder description(String description) {
             this.description = description;
             return this;
         }
+
         public Builder value(Map<String, Node> value) {
             this.value = value;
             return this;
         }
+
         public Builder externalValue(String externalValue) {
             this.externalValue = externalValue;
             return this;
         }
-
     }
 }
