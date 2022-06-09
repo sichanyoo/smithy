@@ -25,8 +25,8 @@ import software.amazon.smithy.utils.ToSmithyBuilder;
 
 public final class MediaTypeObject extends Component implements ToSmithyBuilder<MediaTypeObject> {
     private final Schema schema;
-    private final Node example;
-    private final Map<String, Node> examples = new TreeMap<>();
+    private final ExampleObject example;
+    private final Map<String, ExampleObject> examples = new TreeMap<>();
     private final Map<String, EncodingObject> encoding = new TreeMap<>();
 
     private MediaTypeObject(Builder builder) {
@@ -45,11 +45,11 @@ public final class MediaTypeObject extends Component implements ToSmithyBuilder<
         return Optional.ofNullable(schema);
     }
 
-    public Optional<Node> getExample() {
+    public Optional<ExampleObject> getExample() {
         return Optional.ofNullable(example);
     }
 
-    public Map<String, Node> getExamples() {
+    public Map<String, ExampleObject> getExamples() {
         return examples;
     }
 
@@ -88,8 +88,8 @@ public final class MediaTypeObject extends Component implements ToSmithyBuilder<
 
     public static final class Builder extends Component.Builder<Builder, MediaTypeObject> {
         private Schema schema;
-        private Node example;
-        private final Map<String, Node> examples = new TreeMap<>();
+        private ExampleObject example;
+        private final Map<String, ExampleObject> examples = new TreeMap<>();
         private final Map<String, EncodingObject> encoding = new TreeMap<>();
 
         private Builder() {}
@@ -104,18 +104,18 @@ public final class MediaTypeObject extends Component implements ToSmithyBuilder<
             return this;
         }
 
-        public Builder example(Node example) {
+        public Builder example(ExampleObject example) {
             this.example = example;
             return this;
         }
 
-        public Builder examples(Map<String, Node> examples) {
+        public Builder examples(Map<String, ExampleObject> examples) {
             this.examples.clear();
             this.examples.putAll(examples);
             return this;
         }
 
-        public Builder putExample(String name, Node example) {
+        public Builder putExample(String name, ExampleObject example) {
             examples.put(name, example);
             return this;
         }
