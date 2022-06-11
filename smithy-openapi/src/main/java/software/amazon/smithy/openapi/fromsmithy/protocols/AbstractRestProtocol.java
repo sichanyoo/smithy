@@ -33,7 +33,6 @@ import software.amazon.smithy.model.knowledge.EventStreamInfo;
 import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
-import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.pattern.SmithyPattern;
 import software.amazon.smithy.model.shapes.CollectionShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -204,31 +203,28 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         Map<String, ExampleObject> examples = new TreeMap<>();
         // gets the ExamplesTrait Smithy model object applied to (@input) operation shape.
         Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
-        // the name of the input structure member that has @httpLabel trait applied to it.
-        String memberName = binding.getMemberName();
+        // unique numbering for unique example names in OpenAPI
+        int uniqueNum = 1;
 
         // if the operation shape has ExamplesTrait applied to it,
         if (examplesTrait.isPresent()) {
-            // loop over each example in Smithy model (input, output/error logical grouping of Smithy examples).
+            // loop over each example unit (input, output/error logical grouping of Smithy examples).
             for (ExamplesTrait.Example individualExample : examplesTrait.get().getExamples()) {
                 // "title" property from Smithy example
                 String title = individualExample.getTitle();
                 // "documentation" property from Smithy example
                 Optional<String> doc = individualExample.getDocumentation();
 
-                // ACTUAL literal example value for the path parameter from Smithy model.
-                ObjectNode actualValue = individualExample.getInput();
-
                 // create ExampleObject open api model object, populate it with values from Smithy example,
-                // then add to examples return value as one of the example for the member.
-                // the key here should be example name + member name + "Input"
-                String key = title + "_" + memberName + "_input";
-                examples.put(key, ExampleObject.builder()
+                // then add to examples return value as one of the example for the member (path parameter).
+                examples.put("exampleValue" + uniqueNum, ExampleObject.builder()
                                     .summary(title)
                                     .description(doc.orElse(""))
-                                    .value(actualValue)
+                                    .value(individualExample.getInput())
                                     .build()
                 );
+                // increase uniqueNum by one for next unique name
+                uniqueNum++;
             }
         }
 
