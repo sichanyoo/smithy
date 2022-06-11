@@ -15,7 +15,6 @@
 
 package software.amazon.smithy.openapi.model;
 
-import java.util.Map;
 import java.util.Optional;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -25,7 +24,7 @@ import software.amazon.smithy.utils.ToSmithyBuilder;
 public final class ExampleObject extends Component implements ToSmithyBuilder<ExampleObject> {
     private final String summary;
     private final String description;
-    private final Map<String, Node> value;
+    private final ObjectNode value;
     private final String externalValue;
 
     private ExampleObject(Builder builder) {
@@ -49,7 +48,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
         return Optional.ofNullable(description);
     }
 
-    public Optional<Map<String, Node>> getValue() {
+    public Optional<ObjectNode> getValue() {
         return Optional.ofNullable(value);
     }
 
@@ -80,7 +79,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
     public static final class Builder extends Component.Builder<Builder, ExampleObject> {
         private String summary;
         private String description;
-        private Map<String, Node> value;
+        private ObjectNode value;
         private String externalValue;
 
         private Builder() {}
@@ -101,7 +100,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
             return this;
         }
 
-        public Builder value(Map<String, Node> value) {
+        public Builder value(ObjectNode value) {
             this.value = value;
             return this;
         }

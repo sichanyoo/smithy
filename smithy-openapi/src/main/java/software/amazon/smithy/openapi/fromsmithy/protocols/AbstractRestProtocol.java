@@ -33,7 +33,7 @@ import software.amazon.smithy.model.knowledge.EventStreamInfo;
 import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
-import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.pattern.SmithyPattern;
 import software.amazon.smithy.model.shapes.CollectionShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -217,9 +217,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 Optional<String> doc = individualExample.getDocumentation();
 
                 // ACTUAL literal example value for the path parameter from Smithy model.
-                Map<String, Node> actualValue = new TreeMap<>();
-                // store [member name : example value for that member] to actual example value
-                actualValue.put(memberName, individualExample.getInput());
+                ObjectNode actualValue = individualExample.getInput();
 
                 // create ExampleObject open api model object, populate it with values from Smithy example,
                 // then add to examples return value as one of the example for the member.
