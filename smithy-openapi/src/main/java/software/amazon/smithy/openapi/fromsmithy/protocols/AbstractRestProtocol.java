@@ -33,6 +33,7 @@ import software.amazon.smithy.model.knowledge.EventStreamInfo;
 import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
+import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.pattern.SmithyPattern;
 import software.amazon.smithy.model.shapes.CollectionShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -41,6 +42,7 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.ExamplesTrait;
 import software.amazon.smithy.model.traits.HttpChecksumRequiredTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.model.traits.TimestampFormatTrait;
@@ -48,6 +50,7 @@ import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.openapi.OpenApiException;
 import software.amazon.smithy.openapi.fromsmithy.Context;
 import software.amazon.smithy.openapi.fromsmithy.OpenApiProtocol;
+import software.amazon.smithy.openapi.model.ExampleObject;
 import software.amazon.smithy.openapi.model.MediaTypeObject;
 import software.amazon.smithy.openapi.model.OperationObject;
 import software.amazon.smithy.openapi.model.ParameterObject;
@@ -164,6 +167,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         for (HttpBinding binding : bindingIndex.getRequestBindings(operation, HttpBinding.Location.LABEL)) {
             Schema schema = createPathParameterSchema(context, binding);
             String memberName = binding.getMemberName();
+            Map<String, ExampleObject> examples = createPathParameterExamples(operation, binding);
 
             SmithyPattern.Segment label = httpTrait.getUri()
                     .getLabel(memberName)
@@ -187,10 +191,50 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .name(name)
                     .in("path")
                     .schema(schema)
+                    .examples(examples)
                     .build());
         }
 
         return result;
+    }
+
+    private Map<String, ExampleObject> createPathParameterExamples(OperationShape operation,
+                                                                   HttpBinding binding) {
+        // value to return (examples property of ParameterObject OpenAPI model).
+        Map<String, ExampleObject> examples = new TreeMap<>();
+        // gets the ExamplesTrait Smithy model object applied to (@input) operation shape.
+        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        // the name of the input structure member that has @httpLabel trait applied to it.
+        String memberName = binding.getMemberName();
+
+        // if the operation shape has ExamplesTrait applied to it,
+        if (examplesTrait.isPresent()) {
+            // loop over each example in Smithy model (input, output/error logical grouping of Smithy examples).
+            for (ExamplesTrait.Example individualExample : examplesTrait.get().getExamples()) {
+                // "title" property from Smithy example
+                String title = individualExample.getTitle();
+                // "documentation" property from Smithy example
+                Optional<String> doc = individualExample.getDocumentation();
+
+                // ACTUAL literal example value for the path parameter from Smithy model.
+                Map<String, Node> actualValue = new TreeMap<>();
+                // store [member name : example value for that member] to actual example value
+                actualValue.put(memberName, individualExample.getInput());
+
+                // create ExampleObject open api model object, populate it with values from Smithy example,
+                // then add to examples return value as one of the example for the member.
+                // the key here should be example name + member name + "Input"
+                String key = title + "_" + memberName + "_input";
+                examples.put(key, ExampleObject.builder()
+                                    .summary(title)
+                                    .description(doc.orElse(""))
+                                    .value(actualValue)
+                                    .build()
+                );
+            }
+        }
+
+        return examples;
     }
 
     private Schema createPathParameterSchema(Context<T> context, HttpBinding binding) {
