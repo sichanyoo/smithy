@@ -281,6 +281,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .in("query")
                     .name(binding.getLocationName());
             Shape target = context.getModel().expectShape(member.getTarget());
+            Map<String, ExampleObject> examples = createParameterExamples(operation, binding);
 
             // List and set shapes in the query string are repeated, so we need to "explode" them
             // using the "form" style (e.g., "foo=bar&foo=baz").
@@ -303,6 +304,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             }
 
             param.schema(createQuerySchema(context, member, target));
+            param.examples(examples);
             result.add(param.build());
         }
 
