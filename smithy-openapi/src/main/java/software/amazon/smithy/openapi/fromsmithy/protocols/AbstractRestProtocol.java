@@ -166,7 +166,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         for (HttpBinding binding : bindingIndex.getRequestBindings(operation, HttpBinding.Location.LABEL)) {
             Schema schema = createPathParameterSchema(context, binding);
             String memberName = binding.getMemberName();
-            Map<String, ExampleObject> examples = createExamples(operation, binding);
+            Map<String, ExampleObject> examples = createParameterExamples(operation, binding);
 
             SmithyPattern.Segment label = httpTrait.getUri()
                     .getLabel(memberName)
@@ -197,7 +197,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         return result;
     }
 
-    private Map<String, ExampleObject> createExamples(OperationShape operation, HttpBinding binding) {
+    private Map<String, ExampleObject> createParameterExamples(OperationShape operation, HttpBinding binding) {
         // value to return (examples property of ParameterObject OpenAPI model).
         Map<String, ExampleObject> examples = new TreeMap<>();
         // gets the ExamplesTrait Smithy model object applied to (@input) operation shape.
@@ -216,13 +216,17 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
 
                 // create ExampleObject open api model object, populate it with values from Smithy example,
-                // then add to examples return value as one of the example for the member (path parameter).
+                // then add to examples return value as one of the example for the member.
                 examples.put("exampleValue" + uniqueNum, ExampleObject.builder()
                                     .summary(title)
                                     .description(doc.orElse(""))
                                     .value(individualExample
                                             .getInput()
-                                            .expectObjectNode(binding.getMemberName()))
+                                            .getMember(binding.getMemberName())
+                                            .orElseThrow(() -> new OpenApiException(String.format(
+                                                    "Unable to find example value for %s in [%s] example",
+                                                    operation.getId() + binding.getMemberName(),
+                                                    title))))
                                     .build()
                 );
                 // increase uniqueNum by one for next unique name
