@@ -166,7 +166,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         for (HttpBinding binding : bindingIndex.getRequestBindings(operation, HttpBinding.Location.LABEL)) {
             Schema schema = createPathParameterSchema(context, binding);
             String memberName = binding.getMemberName();
-            Map<String, ExampleObject> examples = createPathParameterExamples(operation, binding);
+            Map<String, ExampleObject> examples = createExamples(operation, binding);
 
             SmithyPattern.Segment label = httpTrait.getUri()
                     .getLabel(memberName)
@@ -197,8 +197,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         return result;
     }
 
-    private Map<String, ExampleObject> createPathParameterExamples(OperationShape operation,
-                                                                   HttpBinding binding) {
+    private Map<String, ExampleObject> createExamples(OperationShape operation, HttpBinding binding) {
         // value to return (examples property of ParameterObject OpenAPI model).
         Map<String, ExampleObject> examples = new TreeMap<>();
         // gets the ExamplesTrait Smithy model object applied to (@input) operation shape.
@@ -215,12 +214,15 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // "documentation" property from Smithy example
                 Optional<String> doc = individualExample.getDocumentation();
 
+
                 // create ExampleObject open api model object, populate it with values from Smithy example,
                 // then add to examples return value as one of the example for the member (path parameter).
                 examples.put("exampleValue" + uniqueNum, ExampleObject.builder()
                                     .summary(title)
                                     .description(doc.orElse(""))
-                                    .value(individualExample.getInput())
+                                    .value(individualExample
+                                            .getInput()
+                                            .expectObjectNode(binding.getMemberName()))
                                     .build()
                 );
                 // increase uniqueNum by one for next unique name

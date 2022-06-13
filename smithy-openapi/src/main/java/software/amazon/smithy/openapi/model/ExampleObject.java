@@ -24,7 +24,7 @@ import software.amazon.smithy.utils.ToSmithyBuilder;
 public final class ExampleObject extends Component implements ToSmithyBuilder<ExampleObject> {
     private final String summary;
     private final String description;
-    private final ObjectNode value;
+    private final Node value;
     private final String externalValue;
 
     private ExampleObject(Builder builder) {
@@ -48,7 +48,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
         return Optional.ofNullable(description);
     }
 
-    public Optional<ObjectNode> getValue() {
+    public Optional<Node> getValue() {
         return Optional.ofNullable(value);
     }
 
@@ -71,15 +71,15 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
         return Node.objectNodeBuilder()
                 .withMember("summary", summary)
                 .withOptionalMember("description", getDescription().map(Node::from))
-                .withOptionalMember("value", getDescription().map(Node::from))
-                .withOptionalMember("externalValue", getDescription().map(Node::from));
+                .withOptionalMember("value", getValue().map(Node::from))
+                .withOptionalMember("externalValue", getExternalValue().map(Node::from));
 
     }
 
     public static final class Builder extends Component.Builder<Builder, ExampleObject> {
         private String summary;
         private String description;
-        private ObjectNode value;
+        private Node value;
         private String externalValue;
 
         private Builder() {}
@@ -100,7 +100,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
             return this;
         }
 
-        public Builder value(ObjectNode value) {
+        public Builder value(Node value) {
             this.value = value;
             return this;
         }
