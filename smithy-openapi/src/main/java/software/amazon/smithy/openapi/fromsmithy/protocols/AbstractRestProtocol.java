@@ -33,6 +33,7 @@ import software.amazon.smithy.model.knowledge.EventStreamInfo;
 import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.pattern.SmithyPattern;
 import software.amazon.smithy.model.shapes.CollectionShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -166,7 +167,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         for (HttpBinding binding : bindingIndex.getRequestBindings(operation, HttpBinding.Location.LABEL)) {
             Schema schema = createPathParameterSchema(context, binding);
             String memberName = binding.getMemberName();
-            Map<String, ExampleObject> examples = createParameterExamples(operation, binding);
 
             SmithyPattern.Segment label = httpTrait.getUri()
                     .getLabel(memberName)
@@ -190,18 +190,18 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .name(name)
                     .in("path")
                     .schema(schema)
-                    .examples(examples)
+                    .examples(createExamples(operation, binding, MessageType.REQUEST))
                     .build());
         }
 
         return result;
     }
 
-    private Map<String, ExampleObject> createParameterExamples(OperationShape operation, HttpBinding binding) {
-        // value to return (examples property of ParameterObject OpenAPI model).
+    private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding, MessageType type) {
+        // value to return (examples property of OpenAPI model).
         Map<String, ExampleObject> examples = new TreeMap<>();
-        // gets the ExamplesTrait Smithy model object applied to (@input) operation shape.
-        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        // gets the ExamplesTrait applied to (@input) operation shape.
+        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
         // unique numbering for unique example names in OpenAPI
         int uniqueNum = 1;
 
@@ -209,31 +209,39 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         if (examplesTrait.isPresent()) {
             // loop over each example unit (input, output/error logical grouping of Smithy examples).
             for (ExamplesTrait.Example individualExample : examplesTrait.get().getExamples()) {
+                // unique naming for each example
+                String exampleName = "exampleValue" + uniqueNum;
                 // "title" property from Smithy example
                 String title = individualExample.getTitle();
                 // "documentation" property from Smithy example
                 Optional<String> doc = individualExample.getDocumentation();
+                // populate ExampleObject except value property
+                ExampleObject.Builder exampleObject = ExampleObject.builder();
+                exampleObject.summary(title).description(doc.orElse(""));
 
+                // storage for value property
+                ObjectNode inputOutputOrError;
+                // get input / output / error based on message type
+                if (type == MessageType.REQUEST) {
+                    inputOutputOrError = individualExample.getInput();
+                } else if (type == MessageType.RESPONSE) { // type == MessageType.RESPONSE
+                    inputOutputOrError = individualExample.getOutput();
+                } else {
+                    inputOutputOrError = individualExample.getError().get().getContent();
+                }
 
-                // create ExampleObject open api model object, populate it with values from Smithy example,
+                // populate ExampleObject with values from Smithy example,
                 // then add to examples return value as one of the example for the member.
-                examples.put("exampleValue" + uniqueNum, ExampleObject.builder()
-                                    .summary(title)
-                                    .description(doc.orElse(""))
-                                    .value(individualExample
-                                            .getInput()
-                                            .getMember(binding.getMemberName())
-                                            .orElseThrow(() -> new OpenApiException(String.format(
-                                                    "Unable to find example value for %s in [%s] example",
-                                                    operation.getId() + binding.getMemberName(),
-                                                    title))))
-                                    .build()
+                examples.put(exampleName,
+                        exampleObject.value(inputOutputOrError
+                                        .getMember(binding.getMemberName())
+                                        .orElse(inputOutputOrError))
+                                .build()
                 );
                 // increase uniqueNum by one for next unique name
                 uniqueNum++;
             }
         }
-
         return examples;
     }
 
@@ -281,7 +289,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .in("query")
                     .name(binding.getLocationName());
             Shape target = context.getModel().expectShape(member.getTarget());
-            Map<String, ExampleObject> examples = createParameterExamples(operation, binding);
 
             // List and set shapes in the query string are repeated, so we need to "explode" them
             // using the "form" style (e.g., "foo=bar&foo=baz").
@@ -304,7 +311,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             }
 
             param.schema(createQuerySchema(context, member, target));
-            param.examples(examples);
+            param.examples(createExamples(operation, binding, MessageType.REQUEST));
             result.add(param.build());
         }
 
@@ -321,13 +328,14 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     private Collection<ParameterObject> createRequestHeaderParameters(Context<T> context, OperationShape operation) {
         List<HttpBinding> bindings = HttpBindingIndex.of(context.getModel())
                 .getRequestBindings(operation, HttpBinding.Location.HEADER);
-        return createHeaderParameters(context, bindings, MessageType.REQUEST).values();
+        return createHeaderParameters(context, bindings, MessageType.REQUEST, operation).values();
     }
 
     private Map<String, ParameterObject> createHeaderParameters(
             Context<T> context,
             List<HttpBinding> bindings,
-            MessageType messageType
+            MessageType messageType,
+            Shape operationOrError
     ) {
         Map<String, ParameterObject> result = new TreeMap<>();
 
@@ -341,6 +349,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // Response headers don't use "in" or "name".
                 param.in(null).name(null);
             }
+            param.examples(createExamples(operationOrError, binding, messageType));
 
             // Create the appropriate schema based on the shape type.
             Shape target = context.getModel().expectShape(member.getTarget());
@@ -510,7 +519,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     ) {
         List<HttpBinding> bindings = HttpBindingIndex.of(context.getModel())
                 .getResponseBindings(operationOrError, HttpBinding.Location.HEADER);
-        return createHeaderParameters(context, bindings, MessageType.RESPONSE);
+        return createHeaderParameters(context, bindings, MessageType.RESPONSE, operationOrError);
     }
 
     private void addResponseContent(
