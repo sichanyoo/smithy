@@ -197,6 +197,16 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         return result;
     }
 
+    /*
+     * This method is used for extracting example values of:
+     *  - members with @httpLabel trait (path parameter)
+     *  - members with @httpQuery or @httpQueryParams trait (query parameter)
+     *  - members with @httpHeader trait (header parameter for both HTTP request / response message headers)
+     *  - members with @httpPayload trait (singular payload for both HTTP request / response message bodies)
+     * ... from Smithy model and converting them to examples in OpenAPI model.
+     * In short, this method takes care of all example conversion except for HTTP message bodies with
+     * multiple fields, rather than singular payload.
+     */
     private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding, MessageType type) {
         // value to return (examples property of OpenAPI model).
         Map<String, ExampleObject> examples = new TreeMap<>();
@@ -416,7 +426,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         MediaTypeObject mediaTypeObject = getMediaTypeObject(context, schema, operation, shape -> {
             String shapeName = context.getService().getContextualName(shape.getId());
             return shapeName + "InputPayload";
-        });
+        }).toBuilder().examples(createExamples(operation, binding, MessageType.REQUEST)).build();
         RequestBodyObject requestBodyObject = RequestBodyObject.builder()
                 .putContent(Objects.requireNonNull(mediaTypeRange), mediaTypeObject)
                 .required(binding.getMember().isRequired())
