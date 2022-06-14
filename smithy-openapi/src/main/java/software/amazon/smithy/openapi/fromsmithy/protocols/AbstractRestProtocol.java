@@ -198,14 +198,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     }
 
     /*
-     * This method is used for extracting example values of:
-     *  - members with @httpLabel trait (path parameter)
-     *  - members with @httpQuery or @httpQueryParams trait (query parameter)
-     *  - members with @httpHeader trait (header parameter for both HTTP request / response message headers)
-     *  - members with @httpPayload trait (singular payload for both HTTP request / response message bodies)
-     * ... from Smithy model and converting them to examples in OpenAPI model.
-     * In short, this method takes care of all example conversion except for HTTP message bodies with
-     * multiple fields, rather than singular payload.
+     * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
      *
      * DO NOT call this method with type as MessageType.ERROR.
      */
@@ -246,6 +239,18 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 );
             }
         }
+        return examples;
+    }
+
+    private Map<String, ExampleObject> createExamples(Shape operationOrError,
+                                                      List<HttpBinding> bindings,
+                                                      MessageType type) {
+        Map<String, ExampleObject> examples = new TreeMap<>();
+
+        // i need to get type : value mapping of all members in bindings for a specific example of an operation
+        // into ExampleObject's value property.
+
+
         return examples;
     }
 
@@ -448,6 +453,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
+                .examples(createExamples(operation, bindings, MessageType.REQUEST))
                 .build();
 
         // If any of the top level bindings are required, then the body itself must be required.
@@ -650,6 +656,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
+                .examples(createExamples(operationOrError, bindings, MessageType.RESPONSE))
                 .build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
