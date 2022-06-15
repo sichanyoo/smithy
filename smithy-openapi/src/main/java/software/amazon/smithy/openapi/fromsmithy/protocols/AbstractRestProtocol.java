@@ -34,6 +34,7 @@ import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
 import software.amazon.smithy.model.node.ObjectNode;
+import software.amazon.smithy.model.node.StringNode;
 import software.amazon.smithy.model.pattern.SmithyPattern;
 import software.amazon.smithy.model.shapes.CollectionShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -200,17 +201,20 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     /*
      * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
      *
-     * DO NOT call this method with type as MessageType.ERROR.
+     * This method is used for converting the examples for:
+     *  - path parameters (an operation's input structure member(s) with @httpLabel in Smithy)
+     *  - query parameters (an operation's input structure member(s) with @httpQuery or @httpQueryParams in Smithy)
+     *  - header parameters (an operation's input / output structure member(s) with @httpHeader in Smithy)
+     *  - payload for request / response (an operation's input / output structure member with @httpPayload in Smithy)
      */
     private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding, MessageType type) {
-        // value to return (examples property of OpenAPI model).
+        // value to return (examples property of an OpenAPI model object).
         Map<String, ExampleObject> examples = new TreeMap<>();
-        // gets the ExamplesTrait applied to (@input) operation shape.
-        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
         // unique numbering for unique example names in OpenAPI
         int uniqueNum = 1;
 
-        // if the operation shape has ExamplesTrait applied to it,
+        // gets the ExamplesTrait applied to (@input) operation shape.
+        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
         if (examplesTrait.isPresent()) {
             // loop over each example unit (input, output/error logical grouping of Smithy examples).
             for (ExamplesTrait.Example individualExample : examplesTrait.get().getExamples()) {
@@ -220,20 +224,21 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 ExampleObject.Builder exampleObject = ExampleObject.builder();
                 exampleObject.summary(individualExample.getTitle())
                              .description(individualExample.getDocumentation().orElse(""));
-
                 // storage for value property
                 ObjectNode inputOutputOrError;
                 // get input / output / error based on message type
                 if (type == MessageType.REQUEST) {
                     inputOutputOrError = individualExample.getInput();
-                } else { // type == MessageType.RESPONSE
+                } else if (type == MessageType.RESPONSE) {
                     inputOutputOrError = individualExample.getOutput();
+                } else { // type == MessageType.ERROR
+                    inputOutputOrError = individualExample.getError().get().getContent();
                 }
-
-                // populate value property of ExampleObject then add to examples.
+                // populate value property of ExampleObject, build, then add to examples.
                 examples.put(exampleName,
                         exampleObject.value(inputOutputOrError
                                         .getMember(binding.getMemberName())
+                                        // the orElse here is for ERROR case
                                         .orElse(inputOutputOrError))
                                 .build()
                 );
@@ -242,15 +247,57 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         return examples;
     }
 
+    /*
+     * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
+     *
+     * This method is used for converting the examples for:
+     *  - HTTP message body of request / response
+     *      (an operation's input / output structure member(s) with no HTTP binding traits applied to them)
+     */
     private Map<String, ExampleObject> createExamples(Shape operationOrError,
                                                       List<HttpBinding> bindings,
                                                       MessageType type) {
+        // value to return (examples property of an OpenAPI model object).
         Map<String, ExampleObject> examples = new TreeMap<>();
+        // unique numbering for unique example names in OpenAPI
+        int uniqueNum = 1;
 
-        // i need to get type : value mapping of all members in bindings for a specific example of an operation
-        // into ExampleObject's value property.
-
-
+        // gets the ExamplesTrait applied to (@input) operation shape.
+        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
+        if (examplesTrait.isPresent()) {
+            // loop over each example unit (input, output/error logical grouping of Smithy examples).
+            for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
+                // values will be what gets assigned to ExampleObject.value
+                // tmp here is used to filter out input / output structure members that don't belong in the body
+                ObjectNode values;
+                ObjectNode tmp;
+                if (type == MessageType.REQUEST) {
+                    values = example.getInput();
+                    tmp = example.getInput();
+                } else if (type == MessageType.RESPONSE) {
+                    values = example.getOutput();
+                    tmp = example.getOutput();
+                } else { // if type == MessageType.ERROR
+                    values = example.getError().get().getContent();
+                    tmp = example.getError().get().getContent();
+                }
+                // first, get all members to throw away by removing members we want from tmp
+                for (HttpBinding binding : bindings) {
+                    tmp = tmp.withoutMember(binding.getMemberName());
+                }
+                // next, trash all irrelevant members from values
+                for (StringNode key : tmp.getMembers().keySet()) {
+                    values = values.withoutMember(key.toString());
+                }
+                // populate ExampleObject, build, and add to examples
+                examples.put("exampleValue" + uniqueNum++,
+                        ExampleObject.builder()
+                                .summary(example.getTitle())
+                                .description(example.getDocumentation().orElse(""))
+                                .value(values)
+                                .build());
+            }
+        }
         return examples;
     }
 
