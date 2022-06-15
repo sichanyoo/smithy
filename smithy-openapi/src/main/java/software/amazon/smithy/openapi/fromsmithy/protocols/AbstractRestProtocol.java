@@ -223,25 +223,29 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // unique name for example. uniqueNum incremented by one post-operation to ensure uniqueness
                 String exampleName = "exampleValue" + uniqueNum++;
                 // populate ExampleObject (except value property)
-                ExampleObject.Builder exampleObject = ExampleObject.builder();
-                exampleObject.summary(individualExample.getTitle())
-                             .description(individualExample.getDocumentation().orElse(""));
+                ExampleObject.Builder exampleObject = ExampleObject.builder()
+                        .summary(individualExample.getTitle())
+                        .description(individualExample.getDocumentation().orElse(""));
                 // storage for value property
-                ObjectNode inputOutputOrError;
+                ObjectNode inputOrOutput;
                 // get input / output / error based on message type
                 if (type == MessageType.REQUEST) {
-                    inputOutputOrError = individualExample.getInput();
+                    inputOrOutput = individualExample.getInput();
                 } else {
-                    inputOutputOrError = individualExample.getOutput();
+                    inputOrOutput = individualExample.getOutput();
                 }
 
+                // this if here is to avoid having empty example objects in OpenAPI output,
+                // caused by Smithy's error example
                 if (!individualExample.getError().isPresent() || type == MessageType.REQUEST) {
                     // populate value property of ExampleObject, build, then add to examples.
                     examples.put(exampleName,
-                            exampleObject.value(inputOutputOrError
+                            exampleObject.value(inputOrOutput
                                             .getMember(binding.getMemberName())
-                                            // the orElse here is for ERROR case
-                                            .orElse(inputOutputOrError))
+                                            .orElseThrow(() -> new OpenApiException(String.format(
+                                                    "Unable to find example value for %s in [%s] example",
+                                                    operationOrError.getId() + "$" + binding.getMemberName(),
+                                                    individualExample.getTitle()))))
                                     .build()
                     );
                 }
@@ -282,6 +286,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     tmp = example.getOutput();
                 }
 
+                // this if here is to avoid having empty example objects in OpenAPI output,
+                // caused by Smithy's error example
                 if (!example.getError().isPresent() || type == MessageType.REQUEST) {
                     // first, get all members to throw away by removing members we want from tmp
                     for (HttpBinding binding : bindings) {
@@ -297,13 +303,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                                     .summary(example.getTitle())
                                     .description(example.getDocumentation().orElse(""))
                                     .value(values)
-                                    .build());
-                } else if (type == MessageType.ERROR){
-                    examples.put("exampleValue" + uniqueNum++,
-                            ExampleObject.builder()
-                                    .summary(example.getTitle())
-                                    .description(example.getDocumentation().orElse(""))
-                                    .value(example.getError().get().getContent())
                                     .build());
                 }
             }
