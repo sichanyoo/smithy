@@ -206,6 +206,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      *  - query parameters (an operation's input structure member(s) with @httpQuery or @httpQueryParams in Smithy)
      *  - header parameters (an operation's input / output structure member(s) with @httpHeader in Smithy)
      *  - payload for request / response (an operation's input / output structure member with @httpPayload in Smithy)
+     *
+     * This method is to be called with MessageType.REQUEST or MessageType.RESPONSE as its type argument
      */
     private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding, MessageType type) {
         // value to return (examples property of an OpenAPI model object).
@@ -229,19 +231,20 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // get input / output / error based on message type
                 if (type == MessageType.REQUEST) {
                     inputOutputOrError = individualExample.getInput();
-                } else if (type == MessageType.RESPONSE) {
+                } else {
                     inputOutputOrError = individualExample.getOutput();
-                } else { // type == MessageType.ERROR
-                    inputOutputOrError = individualExample.getError().get().getContent();
                 }
-                // populate value property of ExampleObject, build, then add to examples.
-                examples.put(exampleName,
-                        exampleObject.value(inputOutputOrError
-                                        .getMember(binding.getMemberName())
-                                        // the orElse here is for ERROR case
-                                        .orElse(inputOutputOrError))
-                                .build()
-                );
+
+                if (!individualExample.getError().isPresent() || type == MessageType.REQUEST) {
+                    // populate value property of ExampleObject, build, then add to examples.
+                    examples.put(exampleName,
+                            exampleObject.value(inputOutputOrError
+                                            .getMember(binding.getMemberName())
+                                            // the orElse here is for ERROR case
+                                            .orElse(inputOutputOrError))
+                                    .build()
+                    );
+                }
             }
         }
         return examples;
@@ -274,28 +277,35 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 if (type == MessageType.REQUEST) {
                     values = example.getInput();
                     tmp = example.getInput();
-                } else if (type == MessageType.RESPONSE) {
+                } else {
                     values = example.getOutput();
                     tmp = example.getOutput();
-                } else { // if type == MessageType.ERROR
-                    values = example.getError().get().getContent();
-                    tmp = example.getError().get().getContent();
                 }
-                // first, get all members to throw away by removing members we want from tmp
-                for (HttpBinding binding : bindings) {
-                    tmp = tmp.withoutMember(binding.getMemberName());
+
+                if (!example.getError().isPresent() || type == MessageType.REQUEST) {
+                    // first, get all members to throw away by removing members we want from tmp
+                    for (HttpBinding binding : bindings) {
+                        tmp = tmp.withoutMember(binding.getMemberName());
+                    }
+                    // next, trash all irrelevant members from values
+                    for (StringNode key : tmp.getMembers().keySet()) {
+                        values = values.withoutMember(key.toString());
+                    }
+                    // populate ExampleObject, build, and add to examples
+                    examples.put("exampleValue" + uniqueNum++,
+                            ExampleObject.builder()
+                                    .summary(example.getTitle())
+                                    .description(example.getDocumentation().orElse(""))
+                                    .value(values)
+                                    .build());
+                } else if (type == MessageType.ERROR){
+                    examples.put("exampleValue" + uniqueNum++,
+                            ExampleObject.builder()
+                                    .summary(example.getTitle())
+                                    .description(example.getDocumentation().orElse(""))
+                                    .value(example.getError().get().getContent())
+                                    .build());
                 }
-                // next, trash all irrelevant members from values
-                for (StringNode key : tmp.getMembers().keySet()) {
-                    values = values.withoutMember(key.toString());
-                }
-                // populate ExampleObject, build, and add to examples
-                examples.put("exampleValue" + uniqueNum++,
-                        ExampleObject.builder()
-                                .summary(example.getTitle())
-                                .description(example.getDocumentation().orElse(""))
-                                .value(values)
-                                .build());
             }
         }
         return examples;
@@ -703,7 +713,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(createExamples(operationOrError, bindings, MessageType.RESPONSE))
+                .examples(createExamples(operationOrError, bindings, messageType))
                 .build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
