@@ -59,7 +59,7 @@ public interface OpenApiProtocol<T extends Trait> {
     }
 
     /**
-     * Creates an operation entry, including the method, URI, and operation
+     * Creates an operation entry, including the method, URI, examples, and operation
      * object builder.
      *
      * <p>The operation is returned as an empty Optional if the operation is

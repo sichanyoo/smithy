@@ -191,7 +191,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .name(name)
                     .in("path")
                     .schema(schema)
-                    .examples(createExamples(operation, binding, MessageType.REQUEST))
+                    .examples(createExamples(context, operation, binding, MessageType.REQUEST))
                     .build());
         }
 
@@ -204,40 +204,53 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      * This method is used for converting the examples for:
      *  - path parameters (an operation's input structure member(s) with @httpLabel in Smithy)
      *  - query parameters (an operation's input structure member(s) with @httpQuery or @httpQueryParams in Smithy)
-     *  - header parameters (an operation's input / output structure member(s) with @httpHeader in Smithy)
+     *  - request / response header parameters
+     *              (an operation's input / output structure member(s) with @httpHeader in Smithy)
      *  - payload for request / response (an operation's input / output structure member with @httpPayload in Smithy)
      *
      * This method is to be called with MessageType.REQUEST or MessageType.RESPONSE as its type argument.
      */
-    private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding, MessageType type) {
+    private Map<String, ExampleObject> createExamples(Context<T> context,
+                                                      Shape operation,
+                                                      HttpBinding binding,
+                                                      MessageType type) {
         // value to return (examples property of an OpenAPI model object).
         Map<String, ExampleObject> examples = new TreeMap<>();
         // unique numbering for unique example names in OpenAPI.
         int uniqueNum = 1;
 
-        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
+        // get all examples bound to the operationOrError shape.
+        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        // if examples exist,
         if (examplesTrait.isPresent()) {
             // loop over each example unit (input, output/error logical grouping of Smithy examples).
             for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
-                // get example input / output based on message type.
+                // get example input / output structure based on message type.
                 ObjectNode inputOrOutput = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
+                // name for the example: operationName + HTTP method + "example" + uniqueNum
+                // used by customer (if desired) to piece example input / output / error members
+                // back together into one unit
+                String name = operation.getId().getName() + "_"
+                                + context.getOpenApiProtocol()
+                                    .getOperationMethod(context, operation.asOperationShape().get())
+                                + "_example" + uniqueNum;
 
                 // this if condition is to avoid having empty example objects in OpenAPI output.
                 if (!example.getError().isPresent() || type == MessageType.REQUEST) {
                     // populate ExampleObject, build, then add to examples.
-                    // uniqueNum is incremented by one post-operation to ensure a unique example name within examples.
-                    examples.put("exampleValue" + uniqueNum++,
-                            ExampleObject.builder()
-                                    .summary(example.getTitle())
-                                    .description(example.getDocumentation().orElse(""))
-                                    .value(inputOrOutput
-                                            .getMember(binding.getMemberName())
-                                            .orElseThrow(() -> new OpenApiException(String.format(
-                                                    "Unable to find example value for %s in [%s] example",
-                                                    operationOrError.getId() + "$" + binding.getMemberName(),
-                                                    example.getTitle()))))
+                    examples.put(name, ExampleObject.builder()
+                                        .summary(example.getTitle())
+                                        .description(example.getDocumentation().orElse(""))
+                                        .value(inputOrOutput
+                                                .getMember(binding.getMemberName())
+                                                .orElseThrow(() -> new OpenApiException(String.format(
+                                                        "Unable to find example value for %s in [%s] example",
+                                                        operation.getId() + "$" + binding.getMemberName(),
+                                                        example.getTitle()))))
                                     .build());
                 }
+                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
+                uniqueNum++;
             }
         }
         return examples;
@@ -250,15 +263,24 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      *  - HTTP message body of request / response
      *      (an operation's input / output structure member(s) with no HTTP binding traits applied to them)
      */
-    private Map<String, ExampleObject> createExamples(Shape operationOrError,
+    private Map<String, ExampleObject> createExamples(Context<T> context,
+                                                      Shape operation,
                                                       List<HttpBinding> bindings,
                                                       MessageType type) {
         // value to return (examples property of an OpenAPI model object).
         Map<String, ExampleObject> examples = new TreeMap<>();
         // unique numbering for unique example names in OpenAPI.
         int uniqueNum = 1;
+        // name for the example: operationName + HTTP method + "example" + uniqueNum
+        // used by customer (if desired) to piece example input / output / error members back together into one unit
+        String name = operation.getId().getName() + "_"
+                        + context.getOpenApiProtocol()
+                            .getOperationMethod(context, operation.asOperationShape().get())
+                        + "_example" + uniqueNum;
 
-        Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
+        // get all examples bound to the operationOrError shape.
+        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        // if examples exist,
         if (examplesTrait.isPresent()) {
             // loop over each example unit (input, output/error logical grouping of Smithy examples).
             for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
@@ -269,22 +291,24 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
                 // this if here is to avoid having empty example objects in OpenAPI output.
                 if (!example.getError().isPresent() || type == MessageType.REQUEST) {
-                    // first, get all members to throw away by removing members we want from tmp.
+                    // first, get all members to throw away by removing [members we want] from tmp,
+                    // thereby leaving tmp with all the members we don't want.
                     for (HttpBinding binding : bindings) {
                         tmp = tmp.withoutMember(binding.getMemberName());
                     }
-                    // next, trash all irrelevant members from values.
+                    // next, trash all irrelevant members from values using tmp.
                     for (StringNode key : tmp.getMembers().keySet()) {
                         values = values.withoutMember(key.toString());
                     }
                     // now populate ExampleObject, build, and add to examples
-                    examples.put("exampleValue" + uniqueNum++,
-                            ExampleObject.builder()
-                                    .summary(example.getTitle())
-                                    .description(example.getDocumentation().orElse(""))
-                                    .value(values)
-                                    .build());
+                    examples.put(name, ExampleObject.builder()
+                                        .summary(example.getTitle())
+                                        .description(example.getDocumentation().orElse(""))
+                                        .value(values)
+                                        .build());
                 }
+                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
+                uniqueNum++;
             }
         }
         return examples;
@@ -295,30 +319,37 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      *
      * This method is used for converting example error responses to OpenAPI examples.
      */
-    private Map<String, ExampleObject> createErrorExamples(Shape operationOrError, Context<T> context) {
+    private Map<String, ExampleObject> createErrorExamples(Shape error, Context<T> context) {
         // value to return (examples property of an OpenAPI model object).
         Map<String, ExampleObject> examples = new TreeMap<>();
-        // unique numbering for unique example names in OpenAPI.
-        int uniqueNum = 1;
 
         // get all operations with @examples trait from the model
         Set<OperationShape> operationsWithExamples =
                 context.getModel().getOperationShapesWithTrait(ExamplesTrait.class);
 
+        // loop over each operation with examples.
         for (OperationShape operation : operationsWithExamples) {
+            // unique numbering for unique example names in OpenAPI.
+            int uniqueNum = 1;
+            // for each example of the operation,
             for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
                 // check if the example has error response & that its shapeId property == shapeId of operationOrError.
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
-                        && example.getError().get().getShapeId() == operationOrError.toShapeId()) {
+                        && example.getError().get().getShapeId() == error.toShapeId()) {
                     // add the content to example object, build, and add to examples
-                    examples.put("exampleValue" + uniqueNum++,
+                    examples.put(operation.getId().getName() + "_"
+                                    + context.getOpenApiProtocol()
+                                    .getOperationMethod(context, operation.asOperationShape().get())
+                                    + "_example" + uniqueNum,
                             ExampleObject.builder()
                                     .summary(example.getTitle())
                                     .description(example.getDocumentation().orElse(""))
                                     .value(example.getError().get().getContent())
                                     .build());
                 }
+                // increment uniqueNum by one for unique naming of examples.
+                uniqueNum++;
             }
         }
         return examples;
@@ -390,7 +421,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             }
 
             param.schema(createQuerySchema(context, member, target));
-            param.examples(createExamples(operation, binding, MessageType.REQUEST));
+            param.examples(createExamples(context, operation, binding, MessageType.REQUEST));
             result.add(param.build());
         }
 
@@ -428,7 +459,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // Response headers don't use "in" or "name".
                 param.in(null).name(null);
             }
-            param.examples(createExamples(operationOrError, binding, messageType));
+            param.examples(createExamples(context, operationOrError, binding, messageType));
 
             // Create the appropriate schema based on the shape type.
             Shape target = context.getModel().expectShape(member.getTarget());
@@ -495,7 +526,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         MediaTypeObject mediaTypeObject = getMediaTypeObject(context, schema, operation, shape -> {
             String shapeName = context.getService().getContextualName(shape.getId());
             return shapeName + "InputPayload";
-        }).toBuilder().examples(createExamples(operation, binding, MessageType.REQUEST)).build();
+        }).toBuilder().examples(createExamples(context, operation, binding, MessageType.REQUEST)).build();
         RequestBodyObject requestBodyObject = RequestBodyObject.builder()
                 .putContent(Objects.requireNonNull(mediaTypeRange), mediaTypeObject)
                 .required(binding.getMember().isRequired())
@@ -523,7 +554,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(createExamples(operation, bindings, MessageType.REQUEST))
+                .examples(createExamples(context, operation, bindings, MessageType.REQUEST))
                 .build();
 
         // If any of the top level bindings are required, then the body itself must be required.
@@ -649,7 +680,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             return shape instanceof OperationShape
                     ? shapeName + "OutputPayload"
                     : shapeName + "ErrorPayload";
-        }).toBuilder().examples(createExamples(operationOrError, binding, MessageType.RESPONSE)).build();
+        }).toBuilder().examples(createExamples(context, operationOrError, binding, MessageType.RESPONSE)).build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
     }
@@ -727,7 +758,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
                 .examples(messageType == MessageType.RESPONSE
-                        ? createExamples(operationOrError, bindings, messageType)
+                        ? createExamples(context, operationOrError, bindings, messageType)
                         : createErrorExamples(operationOrError, context))
                 .build();
 
