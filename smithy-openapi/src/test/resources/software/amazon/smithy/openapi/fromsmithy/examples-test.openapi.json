@@ -229,6 +229,14 @@
                     "fooBody1": "fooValidBody3",
                     "fooBody2": "fooValidBody4"
                   }
+                },
+                "Foo_PUT_example3": {
+                  "summary": "Foo error example 2",
+                  "description": "fooTestDoc3",
+                  "value": {
+                    "fooBody1": "fooValidBody5",
+                    "fooBody2": "fooValidBody6"
+                  }
                 }
               }
             }
@@ -252,6 +260,11 @@
                 "summary": "Foo error example",
                 "description": "fooTestDoc2",
                 "value": "klm"
+              },
+              "Foo_PUT_example3": {
+                "summary": "Foo error example 2",
+                "description": "fooTestDoc3",
+                "value": "qrs"
               }
             }
           },
@@ -284,6 +297,15 @@
                   "y",
                   "z"
                 ]
+              },
+              "Foo_PUT_example3": {
+                "summary": "Foo error example 2",
+                "description": "fooTestDoc3",
+                "value": [
+                  "@",
+                  "#",
+                  "$"
+                ]
               }
             }
           },
@@ -303,6 +325,11 @@
                 "summary": "Foo error example",
                 "description": "fooTestDoc2",
                 "value": "hij"
+              },
+              "Foo_PUT_example3": {
+                "summary": "Foo error example 2",
+                "description": "fooTestDoc3",
+                "value": "nop"
               }
             }
           }
@@ -401,6 +428,27 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "FooBarError2 500 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FooBarError2ResponseContent"
+                },
+                "examples": {
+                  "Foo_PUT_example3": {
+                    "summary": "Foo error example 2",
+                    "description": "fooTestDoc3",
+                    "value": {
+                      "message1": "fooBarError2message1",
+                      "message2": "fooBarError2message2",
+                      "message3": "fooBarError2message3"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -418,6 +466,20 @@
             "type": "string"
           },
           "barOutputBody2": {
+            "type": "string"
+          }
+        }
+      },
+      "FooBarError2ResponseContent": {
+        "type": "object",
+        "properties": {
+          "message1": {
+            "type": "string"
+          },
+          "message2": {
+            "type": "string"
+          },
+          "message3": {
             "type": "string"
           }
         }

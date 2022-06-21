@@ -13,7 +13,7 @@ service Example {
 operation Foo {
     input: FooInput,
     output: FooOutput,
-    errors: [FooBarError]
+    errors: [FooBarError, FooBarError2]
 }
 
 @idempotent
@@ -97,6 +97,13 @@ structure FooBarError {
     message: String
 }
 
+@error("server")
+structure FooBarError2 {
+    message1: String,
+    message2: String,
+    message3: String
+}
+
 apply Foo @examples(
   [
       {
@@ -132,6 +139,26 @@ apply Foo @examples(
                 content: {
                     errorHeader: "fooBarErrorHeader1",
                     message: "fooBarError1"
+                }
+           },
+      },
+
+      {
+           title: "Foo error example 2",
+           documentation: "fooTestDoc3",
+           input: {
+                fooStringHeader: "nop",
+                fooLabel: "qrs",
+                fooParam: ["@", "#", "$"],
+                fooBody1: "fooValidBody5",
+                fooBody2: "fooValidBody6"
+           },
+           error: {
+                shapeId: FooBarError2,
+                content: {
+                    message1: "fooBarError2message1",
+                    message2: "fooBarError2message2",
+                    message3: "fooBarError2message3"
                 }
            },
       }
