@@ -90,6 +90,10 @@ structure BarOutput {
 
 @error("client")
 structure FooBarError {
+    @httpHeader("Z-Foo")
+    errorHeader: String,
+
+    @httpPayload
     message: String
 }
 
@@ -126,6 +130,7 @@ apply Foo @examples(
            error: {
                 shapeId: FooBarError,
                 content: {
+                    errorHeader: "fooBarErrorHeader1",
                     message: "fooBarError1"
                 }
            },
@@ -164,6 +169,7 @@ apply Bar @examples(
            error: {
                 shapeId: FooBarError,
                 content: {
+                    errorHeader: "fooBarErrorHeader2",
                     message: "fooBarError2"
                 }
            },

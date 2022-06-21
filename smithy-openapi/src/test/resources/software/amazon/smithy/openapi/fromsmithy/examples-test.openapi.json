@@ -162,25 +162,40 @@
           },
           "400": {
             "description": "FooBarError 400 response",
-            "content": {
-              "application/json": {
+            "headers": {
+              "Z-Foo": {
                 "schema": {
-                  "$ref": "#/components/schemas/FooBarErrorResponseContent"
+                  "type": "string"
                 },
                 "examples": {
                   "Bar_PATCH_example2": {
                     "summary": "Bar error example",
                     "description": "barTestDoc2",
-                    "value": {
-                      "message": "fooBarError2"
-                    }
+                    "value": "fooBarErrorHeader2"
                   },
                   "Foo_PUT_example2": {
                     "summary": "Foo error example",
                     "description": "fooTestDoc2",
-                    "value": {
-                      "message": "fooBarError1"
-                    }
+                    "value": "fooBarErrorHeader1"
+                  }
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FooBarErrorErrorPayload"
+                },
+                "examples": {
+                  "Bar_PATCH_example2": {
+                    "summary": "Bar error example",
+                    "description": "barTestDoc2",
+                    "value": "fooBarError2"
+                  },
+                  "Foo_PUT_example2": {
+                    "summary": "Foo error example",
+                    "description": "fooTestDoc2",
+                    "value": "fooBarError1"
                   }
                 }
               }
@@ -200,6 +215,14 @@
               },
               "examples": {
                 "Foo_PUT_example1": {
+                  "summary": "Foo valid example",
+                  "description": "fooTestDoc",
+                  "value": {
+                    "fooBody1": "fooValidBody1",
+                    "fooBody2": "fooValidBody2"
+                  }
+                },
+                "Foo_PUT_example2": {
                   "summary": "Foo error example",
                   "description": "fooTestDoc2",
                   "value": {
@@ -340,25 +363,40 @@
           },
           "400": {
             "description": "FooBarError 400 response",
-            "content": {
-              "application/json": {
+            "headers": {
+              "Z-Foo": {
                 "schema": {
-                  "$ref": "#/components/schemas/FooBarErrorResponseContent"
+                  "type": "string"
                 },
                 "examples": {
                   "Bar_PATCH_example2": {
                     "summary": "Bar error example",
                     "description": "barTestDoc2",
-                    "value": {
-                      "message": "fooBarError2"
-                    }
+                    "value": "fooBarErrorHeader2"
                   },
                   "Foo_PUT_example2": {
                     "summary": "Foo error example",
                     "description": "fooTestDoc2",
-                    "value": {
-                      "message": "fooBarError1"
-                    }
+                    "value": "fooBarErrorHeader1"
+                  }
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FooBarErrorErrorPayload"
+                },
+                "examples": {
+                  "Bar_PATCH_example2": {
+                    "summary": "Bar error example",
+                    "description": "barTestDoc2",
+                    "value": "fooBarError2"
+                  },
+                  "Foo_PUT_example2": {
+                    "summary": "Foo error example",
+                    "description": "fooTestDoc2",
+                    "value": "fooBarError1"
                   }
                 }
               }
@@ -384,13 +422,8 @@
           }
         }
       },
-      "FooBarErrorResponseContent": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string"
-          }
-        }
+      "FooBarErrorErrorPayload": {
+        "type": "string"
       },
       "FooRequestContent": {
         "type": "object",

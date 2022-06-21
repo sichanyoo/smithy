@@ -199,160 +199,201 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     }
 
     /*
-     * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
-     *
-     * This method is used for converting the examples for:
-     *  - path parameters (an operation's input structure member(s) with @httpLabel in Smithy)
-     *  - query parameters (an operation's input structure member(s) with @httpQuery or @httpQueryParams in Smithy)
-     *  - request / response header parameters
-     *              (an operation's input / output structure member(s) with @httpHeader in Smithy)
-     *  - payload for request / response (an operation's input / output structure member with @httpPayload in Smithy)
-     *
-     * This method is to be called with MessageType.REQUEST or MessageType.RESPONSE as its type argument.
+     * This method is used for converting the Smithy examples to OpenAPI examples for:
+     *  - operation's input structure member(s) with @httpLabel trait (path parameters).
+     *  - operation's input structure member(s) with @httpQuery / @httpQueryParams trait (query parameters).
+     *  - operation's input / output / error structure member(s) with @httpHeader trait (header parameters).
+     *  - operation's input / output / error structure member with @httpPayload trait (payload).
      */
     private Map<String, ExampleObject> createExamples(Context<T> context,
-                                                      Shape operation,
+                                                      Shape operationOrError,
                                                       HttpBinding binding,
                                                       MessageType type) {
-        // value to return (examples property of an OpenAPI model object).
+        if (type == MessageType.ERROR) {
+            return createErrorExamples(context, operationOrError, binding);
+        } else {
+            Map<String, ExampleObject> examples = new TreeMap<>();
+            // unique numbering for unique example names in OpenAPI.
+            int uniqueNum = 1;
+
+            Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
+            if (examplesTrait.isPresent()) {
+                for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
+                    ObjectNode inputOrOutput = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
+                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // used by customer (if desired) to piece example input / output / error values
+                    // back together into one logical unit from the OpenAPI model, as in Smithy models.
+                    // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
+                    String name = operationOrError.getId().getName() + "_"
+                            + context.getOpenApiProtocol()
+                            .getOperationMethod(context, operationOrError.asOperationShape().get())
+                            + "_example" + uniqueNum++;
+                    // this if condition is needed to avoid errors when converting examples of response.
+                    if (!example.getError().isPresent() || type == MessageType.REQUEST) {
+                        examples.put(name, ExampleObject.builder()
+                                .summary(example.getTitle())
+                                .description(example.getDocumentation().orElse(""))
+                                .value(inputOrOutput
+                                        .getMember(binding.getMemberName())
+                                        .orElseThrow(() -> new OpenApiException(String.format(
+                                                "Unable to find example value for %s in [%s] example",
+                                                operationOrError.getId() + "$" + binding.getMemberName(),
+                                                example.getTitle()))))
+                                .build());
+                    }
+                }
+            }
+            return examples;
+        }
+    }
+
+    /*
+     * Helper method for createExamples() method.
+     * Does exactly what creatExamples() does, but for ErrorExample structures.
+     */
+    private Map<String, ExampleObject> createErrorExamples(Context<T> context,
+                                                           Shape error,
+                                                           HttpBinding binding) {
         Map<String, ExampleObject> examples = new TreeMap<>();
-        // unique numbering for unique example names in OpenAPI.
-        int uniqueNum = 1;
+        Set<OperationShape> operationsWithExamples =
+                context.getModel().getOperationShapesWithTrait(ExamplesTrait.class);
 
-        // get all examples bound to the operationOrError shape.
-        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
-        // if examples exist,
-        if (examplesTrait.isPresent()) {
-            // loop over each example unit (input, output/error logical grouping of Smithy examples).
-            for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
-                // get example input / output structure based on message type.
-                ObjectNode inputOrOutput = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
+        for (OperationShape operation : operationsWithExamples) {
+            // unique numbering for unique example names in OpenAPI.
+            int uniqueNum = 1;
+            for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
                 // name for the example: operationName + HTTP method + "example" + uniqueNum
-                // used by customer (if desired) to piece example input / output / error members
-                // back together into one unit
+                // used by customer (if desired) to piece example input / output / error values
+                // back together into one logical unit from the OpenAPI model, as in Smithy models.
+                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                 String name = operation.getId().getName() + "_"
-                                + context.getOpenApiProtocol()
-                                    .getOperationMethod(context, operation.asOperationShape().get())
-                                + "_example" + uniqueNum;
-
-                // this if condition is to avoid having empty example objects in OpenAPI output.
-                if (!example.getError().isPresent() || type == MessageType.REQUEST) {
-                    // populate ExampleObject, build, then add to examples.
+                        + context.getOpenApiProtocol()
+                        .getOperationMethod(context, operation.asOperationShape().get())
+                        + "_example" + uniqueNum++;
+                // this has to be checked because an operation can have more than one error linked to it.
+                if (example.getError().isPresent()
+                        && example.getError().get().getShapeId() == error.toShapeId()) {
                     examples.put(name, ExampleObject.builder()
                                         .summary(example.getTitle())
                                         .description(example.getDocumentation().orElse(""))
-                                        .value(inputOrOutput
+                                        .value(example.getError().get().getContent()
                                                 .getMember(binding.getMemberName())
                                                 .orElseThrow(() -> new OpenApiException(String.format(
                                                         "Unable to find example value for %s in [%s] example",
                                                         operation.getId() + "$" + binding.getMemberName(),
                                                         example.getTitle()))))
-                                    .build());
-                }
-                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                uniqueNum++;
-            }
-        }
-        return examples;
-    }
-
-    /*
-     * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
-     *
-     * This method is used for converting the examples for:
-     *  - HTTP message body of request / response
-     *      (an operation's input / output structure member(s) with no HTTP binding traits applied to them)
-     */
-    private Map<String, ExampleObject> createExamples(Context<T> context,
-                                                      Shape operation,
-                                                      List<HttpBinding> bindings,
-                                                      MessageType type) {
-        // value to return (examples property of an OpenAPI model object).
-        Map<String, ExampleObject> examples = new TreeMap<>();
-        // unique numbering for unique example names in OpenAPI.
-        int uniqueNum = 1;
-        // name for the example: operationName + HTTP method + "example" + uniqueNum
-        // used by customer (if desired) to piece example input / output / error members back together into one unit
-        String name = operation.getId().getName() + "_"
-                        + context.getOpenApiProtocol()
-                            .getOperationMethod(context, operation.asOperationShape().get())
-                        + "_example" + uniqueNum;
-
-        // get all examples bound to the operationOrError shape.
-        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
-        // if examples exist,
-        if (examplesTrait.isPresent()) {
-            // loop over each example unit (input, output/error logical grouping of Smithy examples).
-            for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
-                // this is what actually gets assigned to ExampleObject.value.
-                ObjectNode values = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
-                // this is used to filter out input / output structure members that don't belong in the body.
-                ObjectNode tmp = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
-
-                // this if here is to avoid having empty example objects in OpenAPI output.
-                if (!example.getError().isPresent() || type == MessageType.REQUEST) {
-                    // first, get all members to throw away by removing [members we want] from tmp,
-                    // thereby leaving tmp with all the members we don't want.
-                    for (HttpBinding binding : bindings) {
-                        tmp = tmp.withoutMember(binding.getMemberName());
-                    }
-                    // next, trash all irrelevant members from values using tmp.
-                    for (StringNode key : tmp.getMembers().keySet()) {
-                        values = values.withoutMember(key.toString());
-                    }
-                    // now populate ExampleObject, build, and add to examples
-                    examples.put(name, ExampleObject.builder()
-                                        .summary(example.getTitle())
-                                        .description(example.getDocumentation().orElse(""))
-                                        .value(values)
                                         .build());
                 }
-                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                uniqueNum++;
             }
         }
         return examples;
     }
 
     /*
-     * Used for extracting example values from Smithy model and converting them to examples in OpenAPI model.
-     *
-     * This method is used for converting example error responses to OpenAPI examples.
+     * This method is used for converting the Smithy examples to OpenAPI examples for:
+     *  - operation's input / output / error structure member(s) with no applied HTTP traits (HTTP message body).
      */
-    private Map<String, ExampleObject> createErrorExamples(Shape error, Context<T> context) {
-        // value to return (examples property of an OpenAPI model object).
-        Map<String, ExampleObject> examples = new TreeMap<>();
+    private Map<String, ExampleObject> createBodyExamples(Context<T> context,
+                                                      Shape operationOrError,
+                                                      List<HttpBinding> bindings,
+                                                      MessageType type) {
+        if (type == MessageType.ERROR) {
+            return createErrorBodyExamples(context, operationOrError, bindings);
+        } else {
+            Map<String, ExampleObject> examples = new TreeMap<>();
+            // unique numbering for unique example names in OpenAPI.
+            int uniqueNum = 1;
 
-        // get all operations with @examples trait from the model
+            Optional<ExamplesTrait> examplesTrait = operationOrError.getTrait(ExamplesTrait.class);
+            if (examplesTrait.isPresent()) {
+                for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
+                    // get members included in bindings
+                    ObjectNode values = filter(bindings,
+                            type == MessageType.REQUEST ? example.getInput() : example.getOutput());
+
+                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // used by customer (if desired) to piece example input / output / error members
+                    // back together into one unit.
+                    // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
+                    String name = operationOrError.getId().getName() + "_"
+                            + context.getOpenApiProtocol()
+                            .getOperationMethod(context, operationOrError.asOperationShape().get())
+                            + "_example" + uniqueNum++;
+                    // this if condition is needed to avoid errors when converting examples of response.
+                    if (!example.getError().isPresent() || type == MessageType.REQUEST) {
+                        examples.put(name, ExampleObject.builder()
+                                .summary(example.getTitle())
+                                .description(example.getDocumentation().orElse(""))
+                                .value(values)
+                                .build());
+                    }
+                }
+            }
+            return examples;
+        }
+    }
+
+    /*
+     * Helper method for createBodyExamples() method.
+     * Does exactly what creatBodyExamples() does, but for ErrorExample structures.
+     */
+    private Map<String, ExampleObject> createErrorBodyExamples(Context<T> context,
+                                                               Shape error,
+                                                               List<HttpBinding> bindings) {
+        Map<String, ExampleObject> examples = new TreeMap<>();
         Set<OperationShape> operationsWithExamples =
                 context.getModel().getOperationShapesWithTrait(ExamplesTrait.class);
 
-        // loop over each operation with examples.
         for (OperationShape operation : operationsWithExamples) {
             // unique numbering for unique example names in OpenAPI.
             int uniqueNum = 1;
-            // for each example of the operation,
             for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
-                // check if the example has error response & that its shapeId property == shapeId of operationOrError.
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
                         && example.getError().get().getShapeId() == error.toShapeId()) {
-                    // add the content to example object, build, and add to examples
-                    examples.put(operation.getId().getName() + "_"
-                                    + context.getOpenApiProtocol()
-                                    .getOperationMethod(context, operation.asOperationShape().get())
-                                    + "_example" + uniqueNum,
+                    // get members included in bindings
+                    ObjectNode values = filter(bindings, example.getError().get().getContent());
+
+                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // used by customer (if desired) to piece example input / output / error members
+                    // back together into one unit.
+                    String name = operation.getId().getName() + "_"
+                            + context.getOpenApiProtocol()
+                            .getOperationMethod(context, operation.asOperationShape().get())
+                            + "_example" + uniqueNum;
+                    examples.put(name,
                             ExampleObject.builder()
                                     .summary(example.getTitle())
                                     .description(example.getDocumentation().orElse(""))
-                                    .value(example.getError().get().getContent())
+                                    .value(values)
                                     .build());
                 }
-                // increment uniqueNum by one for unique naming of examples.
+                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                 uniqueNum++;
             }
         }
         return examples;
+    }
+
+    /*
+     * Returns a modified copy of inputOrOutput with just the members bound to a HttpBinding trait.
+     */
+    private ObjectNode filter(List<HttpBinding> bindings, ObjectNode inputOrOutput) {
+        // this is what we want
+        ObjectNode values = inputOrOutput;
+        // this what we dont want.
+        ObjectNode tmp = inputOrOutput.toBuilder().build();
+
+        // remove members we want from tmp, leaving it with members we don't want.
+        for (HttpBinding binding : bindings) {
+            tmp = tmp.withoutMember(binding.getMemberName());
+        }
+        // next, discard members in tmp from values, leaving values with only the members we want.
+        for (StringNode key : tmp.getMembers().keySet()) {
+            values = values.withoutMember(key.toString());
+        }
+
+        return values;
     }
 
     private Schema createPathParameterSchema(Context<T> context, HttpBinding binding) {
@@ -459,6 +500,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 // Response headers don't use "in" or "name".
                 param.in(null).name(null);
             }
+
             param.examples(createExamples(context, operationOrError, binding, messageType));
 
             // Create the appropriate schema based on the shape type.
@@ -554,7 +596,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(createExamples(context, operation, bindings, MessageType.REQUEST))
+                .examples(createBodyExamples(context, operation, bindings, MessageType.REQUEST))
                 .build();
 
         // If any of the top level bindings are required, then the body itself must be required.
@@ -630,7 +672,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     ) {
         List<HttpBinding> bindings = HttpBindingIndex.of(context.getModel())
                 .getResponseBindings(operationOrError, HttpBinding.Location.HEADER);
-        return createHeaderParameters(context, bindings, MessageType.RESPONSE, operationOrError);
+        MessageType type = !operationOrError.hasTrait(ErrorTrait.class) ? MessageType.RESPONSE : MessageType.ERROR;
+        return createHeaderParameters(context, bindings, type, operationOrError);
     }
 
     private void addResponseContent(
@@ -675,12 +718,13 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         // or arrays. These schemas are synthesized as references so that
         // any schemas with string types will pass validation.
         Schema schema = context.inlineOrReferenceSchema(binding.getMember());
+        MessageType type = !operationOrError.hasTrait(ErrorTrait.class) ? MessageType.RESPONSE : MessageType.ERROR;
         MediaTypeObject mediaTypeObject = getMediaTypeObject(context, schema, operationOrError, shape -> {
             String shapeName = context.getService().getContextualName(shape.getId());
             return shape instanceof OperationShape
                     ? shapeName + "OutputPayload"
                     : shapeName + "ErrorPayload";
-        }).toBuilder().examples(createExamples(context, operationOrError, binding, MessageType.RESPONSE)).build();
+        }).toBuilder().examples(createExamples(context, operationOrError, binding, type)).build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
     }
@@ -757,9 +801,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(messageType == MessageType.RESPONSE
-                        ? createExamples(context, operationOrError, bindings, messageType)
-                        : createErrorExamples(operationOrError, context))
+                .examples(createBodyExamples(context, operationOrError, bindings, messageType))
                 .build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
