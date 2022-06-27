@@ -220,14 +220,11 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             if (examplesTrait.isPresent()) {
                 for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
                     ObjectNode inputOrOutput = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
-                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // name for the example: operationName + "example" + uniqueNum
                     // used by customer (if desired) to piece example input / output / error values
                     // back together into one logical unit from the OpenAPI model, as in Smithy models.
                     // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                    String name = operationOrError.getId().getName() + "_"
-                            + context.getOpenApiProtocol()
-                            .getOperationMethod(context, operationOrError.asOperationShape().get())
-                            + "_example" + uniqueNum++;
+                    String name = operationOrError.getId().getName() + "_example" + uniqueNum++;
                     // this if condition is needed to avoid errors when converting examples of response.
                     if (!example.getError().isPresent() || type == MessageType.REQUEST) {
                         examples.put(name, ExampleObject.builder()
@@ -262,14 +259,11 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             // unique numbering for unique example names in OpenAPI.
             int uniqueNum = 1;
             for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
-                // name for the example: operationName + HTTP method + "example" + uniqueNum
+                // name for the example: operationName + "example" + uniqueNum
                 // used by customer (if desired) to piece example input / output / error values
                 // back together into one logical unit from the OpenAPI model, as in Smithy models.
                 // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                String name = operation.getId().getName() + "_"
-                        + context.getOpenApiProtocol()
-                        .getOperationMethod(context, operation.asOperationShape().get())
-                        + "_example" + uniqueNum++;
+                String name = operation.getId().getName() + "_example" + uniqueNum++;
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
                         && example.getError().get().getShapeId() == error.toShapeId()) {
@@ -311,14 +305,11 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     ObjectNode values = filter(bindings,
                             type == MessageType.REQUEST ? example.getInput() : example.getOutput());
 
-                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // name for the example: operationName + "example" + uniqueNum
                     // used by customer (if desired) to piece example input / output / error members
                     // back together into one unit.
                     // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                    String name = operationOrError.getId().getName() + "_"
-                            + context.getOpenApiProtocol()
-                            .getOperationMethod(context, operationOrError.asOperationShape().get())
-                            + "_example" + uniqueNum++;
+                    String name = operationOrError.getId().getName() + "_example" + uniqueNum++;
                     // this if condition is needed to avoid errors when converting examples of response.
                     if (!example.getError().isPresent() || type == MessageType.REQUEST) {
                         examples.put(name, ExampleObject.builder()
@@ -354,13 +345,10 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     // get members included in bindings
                     ObjectNode values = filter(bindings, example.getError().get().getContent());
 
-                    // name for the example: operationName + HTTP method + "example" + uniqueNum
+                    // name for the example: operationName + "example" + uniqueNum
                     // used by customer (if desired) to piece example input / output / error members
                     // back together into one unit.
-                    String name = operation.getId().getName() + "_"
-                            + context.getOpenApiProtocol()
-                            .getOperationMethod(context, operation.asOperationShape().get())
-                            + "_example" + uniqueNum;
+                    String name = operation.getId().getName() + "_example" + uniqueNum;
                     examples.put(name,
                             ExampleObject.builder()
                                     .summary(example.getTitle())
