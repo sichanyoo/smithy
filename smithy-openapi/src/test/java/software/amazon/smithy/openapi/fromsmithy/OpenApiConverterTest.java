@@ -530,20 +530,4 @@ public class OpenApiConverterTest {
 
         Node.assertEquals(result, expectedNode);
     }
-
-    @Test
-    public void convertsExamples() {
-        Model model = Model.assembler()
-                .addImport(getClass().getResource("examples-test.smithy"))
-                .discoverModels()
-                .assemble()
-                .unwrap();
-        OpenApiConfig config = new OpenApiConfig();
-        config.setService(ShapeId.from("example#Example"));
-        Node result = OpenApiConverter.create().config(config).convertToNode(model);
-        Node expectedNode = Node.parse(IoUtils.toUtf8String(
-                getClass().getResourceAsStream("examples-test.openapi.json")));
-
-        Node.assertEquals(result, expectedNode);
-    }
 }
