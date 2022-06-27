@@ -441,7 +441,7 @@ public final class OpenApiConverter {
                 addOperationSecurity(context, result.getOperation(), shape, plugin);
 
                 // Add the documentation trait to the operation if present.
-                shape.getTrait(DocumentationTrait.class)
+                sha`pe.getTrait(DocumentationTrait.class)
                         .map(DocumentationTrait::getValue)
                         .ifPresent(description -> result.getOperation().description(description));
 
