@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License").
  * You may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package software.amazon.smithy.openapi.model;
 import java.util.Optional;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
-import software.amazon.smithy.utils.SmithyBuilder;
 import software.amazon.smithy.utils.ToSmithyBuilder;
 
 public final class ExampleObject extends Component implements ToSmithyBuilder<ExampleObject> {
@@ -29,7 +28,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
 
     private ExampleObject(Builder builder) {
         super(builder);
-        this.summary = SmithyBuilder.requiredState("summary", builder.summary);
+        this.summary = builder.summary;
         this.description = builder.description;
         this.value = builder.value;
         this.externalValue = builder.externalValue;
@@ -40,8 +39,8 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
     }
 
     // getters
-    public String getSummary() {
-        return summary;
+    public Optional<String> getSummary() {
+        return Optional.ofNullable(summary);
     }
 
     public Optional<String> getDescription() {
@@ -69,7 +68,7 @@ public final class ExampleObject extends Component implements ToSmithyBuilder<Ex
     @Override
     protected ObjectNode.Builder createNodeBuilder() {
         return Node.objectNodeBuilder()
-                .withMember("summary", summary)
+                .withOptionalMember("summary", getSummary().map(Node::from))
                 .withOptionalMember("description", getDescription().map(Node::from))
                 .withOptionalMember("value", getValue().map(Node::from))
                 .withOptionalMember("externalValue", getExternalValue().map(Node::from));

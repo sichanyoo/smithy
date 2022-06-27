@@ -4,7 +4,7 @@ use aws.protocols#restJson1
 
 @restJson1
 service Example {
-    version: "0000-00-00",
+    version: "2022-06-26",
     operations: [Foo, Bar]
 }
 
