@@ -191,7 +191,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     .name(name)
                     .in("path")
                     .schema(schema)
-                    .examples(createExamples(context, operation, binding, MessageType.REQUEST))
+                    .examples(createExamples(operation, binding, MessageType.REQUEST, null))
                     .build());
         }
 
@@ -205,12 +205,12 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      *  - operation's input / output / error structure member(s) with @httpHeader trait (header parameters).
      *  - operation's input / output / error structure member with @httpPayload trait (payload).
      */
-    private Map<String, ExampleObject> createExamples(Context<T> context,
-                                                      Shape operationOrError,
+    private Map<String, ExampleObject> createExamples(Shape operationOrError,
                                                       HttpBinding binding,
-                                                      MessageType type) {
+                                                      MessageType type,
+                                                      OperationShape operation) {
         if (type == MessageType.ERROR) {
-            return createErrorExamples(context, operationOrError, binding);
+            return createErrorExamples(operationOrError, binding, operation);
         } else {
             Map<String, ExampleObject> examples = new TreeMap<>();
             // unique numbering for unique example names in OpenAPI.
@@ -226,7 +226,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                     String name = operationOrError.getId().getName() + "_example" + uniqueNum++;
                     // this if condition is needed to avoid errors when converting examples of response.
-                    if (!example.getError().isPresent() || type == MessageType.REQUEST) {
+                    if ((!example.getError().isPresent() || type == MessageType.REQUEST)
+                            && inputOrOutput.containsMember(binding.getMemberName())) {
                         examples.put(name, ExampleObject.builder()
                                 .summary(example.getTitle())
                                 .description(example.getDocumentation().orElse(""))
@@ -248,17 +249,16 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      * Helper method for createExamples() method.
      * Does exactly what creatExamples() does, but for ErrorExample structures.
      */
-    private Map<String, ExampleObject> createErrorExamples(Context<T> context,
-                                                           Shape error,
-                                                           HttpBinding binding) {
+    private Map<String, ExampleObject> createErrorExamples(Shape error,
+                                                           HttpBinding binding,
+                                                           OperationShape operation) {
         Map<String, ExampleObject> examples = new TreeMap<>();
-        Set<OperationShape> operationsWithExamples =
-                context.getModel().getOperationShapesWithTrait(ExamplesTrait.class);
 
-        for (OperationShape operation : operationsWithExamples) {
-            // unique numbering for unique example names in OpenAPI.
-            int uniqueNum = 1;
-            for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
+        // unique numbering for unique example names in OpenAPI.
+        int uniqueNum = 1;
+        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        if (examplesTrait.isPresent()) {
+            for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
                 // name for the example: operationName + "example" + uniqueNum
                 // used by customer (if desired) to piece example input / output / error values
                 // back together into one logical unit from the OpenAPI model, as in Smithy models.
@@ -266,17 +266,18 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 String name = operation.getId().getName() + "_example" + uniqueNum++;
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
-                        && example.getError().get().getShapeId() == error.toShapeId()) {
+                        && example.getError().get().getShapeId() == error.toShapeId()
+                        && example.getError().get().getContent().containsMember(binding.getMemberName())) {
                     examples.put(name, ExampleObject.builder()
-                                        .summary(example.getTitle())
-                                        .description(example.getDocumentation().orElse(""))
-                                        .value(example.getError().get().getContent()
-                                                .getMember(binding.getMemberName())
-                                                .orElseThrow(() -> new OpenApiException(String.format(
-                                                        "Unable to find example value for %s in [%s] example",
-                                                        operation.getId() + "$" + binding.getMemberName(),
-                                                        example.getTitle()))))
-                                        .build());
+                            .summary(example.getTitle())
+                            .description(example.getDocumentation().orElse(""))
+                            .value(example.getError().get().getContent()
+                                    .getMember(binding.getMemberName())
+                                    .orElseThrow(() -> new OpenApiException(String.format(
+                                            "Unable to find example value for %s in [%s] example",
+                                            operation.getId() + "$" + binding.getMemberName(),
+                                            example.getTitle()))))
+                            .build());
                 }
             }
         }
@@ -287,12 +288,12 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      * This method is used for converting the Smithy examples to OpenAPI examples for:
      *  - operation's input / output / error structure member(s) with no applied HTTP traits (HTTP message body).
      */
-    private Map<String, ExampleObject> createBodyExamples(Context<T> context,
-                                                      Shape operationOrError,
+    private Map<String, ExampleObject> createBodyExamples(Shape operationOrError,
                                                       List<HttpBinding> bindings,
-                                                      MessageType type) {
+                                                      MessageType type,
+                                                      OperationShape operation) {
         if (type == MessageType.ERROR) {
-            return createErrorBodyExamples(context, operationOrError, bindings);
+            return createErrorBodyExamples(operationOrError, bindings, operation);
         } else {
             Map<String, ExampleObject> examples = new TreeMap<>();
             // unique numbering for unique example names in OpenAPI.
@@ -328,17 +329,16 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
      * Helper method for createBodyExamples() method.
      * Does exactly what creatBodyExamples() does, but for ErrorExample structures.
      */
-    private Map<String, ExampleObject> createErrorBodyExamples(Context<T> context,
-                                                               Shape error,
-                                                               List<HttpBinding> bindings) {
+    private Map<String, ExampleObject> createErrorBodyExamples(Shape error,
+                                                               List<HttpBinding> bindings,
+                                                               OperationShape operation) {
         Map<String, ExampleObject> examples = new TreeMap<>();
-        Set<OperationShape> operationsWithExamples =
-                context.getModel().getOperationShapesWithTrait(ExamplesTrait.class);
 
-        for (OperationShape operation : operationsWithExamples) {
-            // unique numbering for unique example names in OpenAPI.
-            int uniqueNum = 1;
-            for (ExamplesTrait.Example example : operation.getTrait(ExamplesTrait.class).get().getExamples()) {
+        // unique numbering for unique example names in OpenAPI.
+        int uniqueNum = 1;
+        Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
+        if (examplesTrait.isPresent()) {
+            for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
                         && example.getError().get().getShapeId() == error.toShapeId()) {
@@ -450,7 +450,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             }
 
             param.schema(createQuerySchema(context, member, target));
-            param.examples(createExamples(context, operation, binding, MessageType.REQUEST));
+            param.examples(createExamples(operation, binding, MessageType.REQUEST, null));
             result.add(param.build());
         }
 
@@ -467,14 +467,15 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     private Collection<ParameterObject> createRequestHeaderParameters(Context<T> context, OperationShape operation) {
         List<HttpBinding> bindings = HttpBindingIndex.of(context.getModel())
                 .getRequestBindings(operation, HttpBinding.Location.HEADER);
-        return createHeaderParameters(context, bindings, MessageType.REQUEST, operation).values();
+        return createHeaderParameters(context, bindings, MessageType.REQUEST, operation, null).values();
     }
 
     private Map<String, ParameterObject> createHeaderParameters(
             Context<T> context,
             List<HttpBinding> bindings,
             MessageType messageType,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         Map<String, ParameterObject> result = new TreeMap<>();
 
@@ -489,7 +490,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 param.in(null).name(null);
             }
 
-            param.examples(createExamples(context, operationOrError, binding, messageType));
+            param.examples(createExamples(operationOrError, binding, messageType, operation));
 
             // Create the appropriate schema based on the shape type.
             Shape target = context.getModel().expectShape(member.getTarget());
@@ -556,7 +557,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         MediaTypeObject mediaTypeObject = getMediaTypeObject(context, schema, operation, shape -> {
             String shapeName = context.getService().getContextualName(shape.getId());
             return shapeName + "InputPayload";
-        }).toBuilder().examples(createExamples(context, operation, binding, MessageType.REQUEST)).build();
+        }).toBuilder().examples(createExamples(operation, binding, MessageType.REQUEST, null)).build();
         RequestBodyObject requestBodyObject = RequestBodyObject.builder()
                 .putContent(Objects.requireNonNull(mediaTypeRange), mediaTypeObject)
                 .required(binding.getMember().isRequired())
@@ -584,7 +585,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(createBodyExamples(context, operation, bindings, MessageType.REQUEST))
+                .examples(createBodyExamples(operation, bindings, MessageType.REQUEST, null))
                 .build();
 
         // If any of the top level bindings are required, then the body itself must be required.
@@ -633,7 +634,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         Shape operationOrError = shape.hasTrait(ErrorTrait.class) ? shape : operation;
         String statusCode = context.getOpenApiProtocol().getOperationResponseStatusCode(context, operationOrError);
         ResponseObject response = createResponse(
-                context, bindingIndex, eventStreamIndex, statusCode, operationOrError);
+                context, bindingIndex, eventStreamIndex, statusCode, operationOrError, operation);
         responses.put(statusCode, response);
     }
 
@@ -642,26 +643,28 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             HttpBindingIndex bindingIndex,
             EventStreamIndex eventStreamIndex,
             String statusCode,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         ResponseObject.Builder responseBuilder = ResponseObject.builder();
         String contextName = context.getService().getContextualName(operationOrError);
         String responseName = stripNonAlphaNumericCharsIfNecessary(context, contextName);
         responseBuilder.description(String.format("%s %s response", responseName, statusCode));
-        createResponseHeaderParameters(context, operationOrError)
+        createResponseHeaderParameters(context, operationOrError, operation)
                 .forEach((k, v) -> responseBuilder.putHeader(k, Ref.local(v)));
-        addResponseContent(context, bindingIndex, eventStreamIndex, responseBuilder, operationOrError);
+        addResponseContent(context, bindingIndex, eventStreamIndex, responseBuilder, operationOrError, operation);
         return responseBuilder.build();
     }
 
     private Map<String, ParameterObject> createResponseHeaderParameters(
             Context<T> context,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         List<HttpBinding> bindings = HttpBindingIndex.of(context.getModel())
                 .getResponseBindings(operationOrError, HttpBinding.Location.HEADER);
         MessageType type = !operationOrError.hasTrait(ErrorTrait.class) ? MessageType.RESPONSE : MessageType.ERROR;
-        return createHeaderParameters(context, bindings, type, operationOrError);
+        return createHeaderParameters(context, bindings, type, operationOrError, operation);
     }
 
     private void addResponseContent(
@@ -669,7 +672,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             HttpBindingIndex bindingIndex,
             EventStreamIndex eventStreamIndex,
             ResponseObject.Builder responseBuilder,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         List<HttpBinding> payloadBindings = bindingIndex.getResponseBindings(
                 operationOrError, HttpBinding.Location.PAYLOAD);
@@ -687,9 +691,11 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                 .orElse(null);
 
         if (!payloadBindings.isEmpty()) {
-            createResponsePayload(mediaType, context, payloadBindings.get(0), responseBuilder, operationOrError);
+            createResponsePayload(mediaType, context, payloadBindings.get(0), responseBuilder,
+                    operationOrError, operation);
         } else {
-            createResponseDocumentIfNeeded(mediaType, context, bindingIndex, responseBuilder, operationOrError);
+            createResponseDocumentIfNeeded(mediaType, context, bindingIndex, responseBuilder,
+                    operationOrError, operation);
         }
     }
 
@@ -698,7 +704,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             Context<T> context,
             HttpBinding binding,
             ResponseObject.Builder responseBuilder,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         Objects.requireNonNull(mediaType, "Unable to determine response media type for " + operationOrError);
 
@@ -712,7 +719,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             return shape instanceof OperationShape
                     ? shapeName + "OutputPayload"
                     : shapeName + "ErrorPayload";
-        }).toBuilder().examples(createExamples(context, operationOrError, binding, type)).build();
+        }).toBuilder().examples(createExamples(operationOrError, binding, type, operation)).build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
     }
@@ -744,7 +751,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             Context<T> context,
             HttpBindingIndex bindingIndex,
             ResponseObject.Builder responseBuilder,
-            Shape operationOrError
+            Shape operationOrError,
+            OperationShape operation
     ) {
         List<HttpBinding> bindings = bindingIndex.getResponseBindings(
                 operationOrError, HttpBinding.Location.DOCUMENT);
@@ -789,7 +797,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         String pointer = context.putSynthesizedSchema(synthesizedName, schema);
         MediaTypeObject mediaTypeObject = MediaTypeObject.builder()
                 .schema(Schema.builder().ref(pointer).build())
-                .examples(createBodyExamples(context, operationOrError, bindings, messageType))
+                .examples(createBodyExamples(operationOrError, bindings, messageType, operation))
                 .build();
 
         responseBuilder.putContent(mediaType, mediaTypeObject);
