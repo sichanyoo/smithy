@@ -267,25 +267,26 @@ public class AwsRestJson1ProtocolTest {
         }
     }
 
-    public void testProtocolResultWithExamples(String smithy) {
+    @Test
+    public void convertsExamples() {
         Model model = Model.assembler()
-                .addImport(getClass().getResource(smithy))
+                .addImport(getClass().getResource("examples-test.smithy"))
                 .discoverModels()
                 .assemble()
                 .unwrap();
         OpenApiConfig config = new OpenApiConfig();
-        config.setService(ShapeId.from("smithy.example#Banking"));
+        config.setService(ShapeId.from("example#Banking"));
         ObjectNode result = OpenApiConverter.create()
                 .config(config)
                 .convertToNode(model);
-        String openApiModel = smithy.replace(".json", ".openapi.json");
-        InputStream openApiStream = getClass().getResourceAsStream(openApiModel);
+        InputStream openApiStream = getClass().getResourceAsStream("examples-test.openapi.json");
 
         if (openApiStream == null) {
-            fail("OpenAPI model not found for test case: " + openApiModel);
+            fail("OpenAPI model not found for test case: " + "examples-test.openapi.json");
         } else {
             Node expectedNode = Node.parse(IoUtils.toUtf8String(openApiStream));
             Node.assertEquals(result, expectedNode);
         }
     }
+
 }
