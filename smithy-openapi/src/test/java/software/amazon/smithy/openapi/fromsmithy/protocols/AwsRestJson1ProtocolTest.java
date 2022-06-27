@@ -267,7 +267,8 @@ public class AwsRestJson1ProtocolTest {
         }
     }
 
-    public void testProtocolResultWithExamples(String smithy) {
+    @Test
+    public void convertsExamples(String smithy) {
         Model model = Model.assembler()
                 .addImport(getClass().getResource(smithy))
                 .discoverModels()
@@ -278,7 +279,7 @@ public class AwsRestJson1ProtocolTest {
         ObjectNode result = OpenApiConverter.create()
                 .config(config)
                 .convertToNode(model);
-        String openApiModel = smithy.replace(".json", ".openapi.json");
+        String openApiModel = smithy.replace(".smithy", ".openapi.json");
         InputStream openApiStream = getClass().getResourceAsStream(openApiModel);
 
         if (openApiStream == null) {
