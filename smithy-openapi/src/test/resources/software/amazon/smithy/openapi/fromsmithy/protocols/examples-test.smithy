@@ -1,4 +1,4 @@
-namespace example
+namespace smithy.examplestrait
 
 use aws.protocols#restJson1
 
@@ -34,7 +34,7 @@ structure DepositInput {
     username: String,
 
     @httpQuery("accountHistory")
-    accountHistory: exampleList,
+    accountHistory: ExampleList,
 
     @httpPayload
     depositAmount: String
@@ -49,18 +49,18 @@ structure WithdrawInput {
     username: String,
 
     @httpQueryParams()
-    withdrawParams: exampleMap,
+    withdrawParams: ExampleMap,
 
     time: date,
     withdrawAmount: String,
     withdrawOption: String
 }
 
-list exampleList {
+list ExampleList {
     member: String
 }
 
-map exampleMap {
+map ExampleMap {
     key: String,
     value: String
 }
@@ -77,7 +77,7 @@ structure DepositOutput {
     username: String,
 
     @httpHeader("authenticationResult")
-    authenticationResult: exampleList,
+    authenticationResult: ExampleList,
 
     textMessage: String,
     emailMessage: String
@@ -89,7 +89,7 @@ structure WithdrawOutput {
     branch: String,
 
     @httpHeader("result")
-    accountHistory: exampleList,
+    accountHistory: ExampleList,
 
     location: String,
     bankName: String,
@@ -113,101 +113,101 @@ structure InvalidAmount {
 }
 
 apply Deposit @examples(
-  [
-      {
-           title: "Deposit valid example",
-           documentation: "depositTestDoc",
-           input: {
+    [
+        {
+            title: "Deposit valid example",
+            documentation: "depositTestDoc",
+            input: {
                 accountNumber: "102935",
                 username: "sichanyoo",
                 accountHistory: ["10", "-25", "50"],
                 depositAmount: "200"
-           },
-           output: {
+            },
+            output: {
                 username: "sichanyoo",
                 authenticationResult: ["pass1", "pass2", "pass3"],
                 textMessage: "You deposited 200-text",
                 emailMessage: "You deposited 200-email"
-           },
-      },
+            },
+        },
 
-      {
-           title: "Deposit invalid username example",
-           documentation: "depositTestDoc2",
-           input: {
+        {
+            title: "Deposit invalid username example",
+            documentation: "depositTestDoc2",
+            input: {
                 username: "sichanyoo",
                 accountHistory: ["-200", "200", "10"],
                 depositAmount: "-200"
-           },
-           error: {
+            },
+            error: {
                 shapeId: InvalidUsername,
                 content: {
                     internalErrorCode: "4gsw2-34",
                     errorMessage: "ERROR: Invalid username."
                 }
-           },
-      },
+            },
+        },
 
-      {
-           title: "Deposit invalid amount example",
-           documentation: "depositTestDoc3",
-           input: {
+        {
+            title: "Deposit invalid amount example",
+            documentation: "depositTestDoc3",
+            input: {
                 accountNumber: "203952",
                 username: "obidos",
                 accountHistory: ["2000", "50000", "100"],
                 depositAmount: "-100"
-           },
-           error: {
+            },
+            error: {
                 shapeId: InvalidAmount,
                 content: {
                     errorMessage1: "ERROR: Invalid amount.",
                     errorMessage2: "2gdx4-34",
                     errorMessage3: "2gcbe-98"
                 }
-           },
-      }
-  ]
+            },
+        }
+    ]
 )
 
 apply Withdraw @examples(
-  [
-      {
-           title: "Withdraw valid example",
-           documentation: "withdrawTestDoc",
-           input: {
+    [
+        {
+            title: "Withdraw valid example",
+            documentation: "withdrawTestDoc",
+            input: {
                 accountNumber: "124634",
                 username: "amazon",
                 withdrawParams: {"location" : "Denver", "bankName" : "Chase"},
                 time: "Tue, 29 Apr 2014 18:30:38 GMT",
                 withdrawAmount: "-35",
                 withdrawOption: "ATM"
-           },
-           output: {
+            },
+            output: {
                 branch: "Denver-203",
                 accountHistory: ["34", "5", "-250"],
                 location: "Denver",
                 bankName: "Chase",
-                atmRecording: "test"
-           },
-      },
+                atmRecording: "dGVzdHZpZGVv"
+            },
+        },
 
-      {
-           title: "Withdraw invalid username example",
-           documentation: "withdrawTestDoc2",
-           input: {
+        {
+            title: "Withdraw invalid username example",
+            documentation: "withdrawTestDoc2",
+            input: {
                 accountNumber: "231565",
                 username: "peccy",
                 withdrawParams: {"location" : "Seoul", "bankName" : "Chase"},
                 withdrawAmount: "-450",
                 withdrawOption: "Venmo"
-           },
-           error: {
+            },
+            error: {
                 shapeId: InvalidUsername,
                 content: {
                     internalErrorCode: "8dfws-21",
                     errorMessage: "ERROR: Invalid username."
                 }
-           },
-      }
-  ]
+            },
+        }
+    ]
 )

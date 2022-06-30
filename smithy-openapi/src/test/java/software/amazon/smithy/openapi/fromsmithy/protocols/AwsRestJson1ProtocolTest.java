@@ -275,7 +275,7 @@ public class AwsRestJson1ProtocolTest {
                 .assemble()
                 .unwrap();
         OpenApiConfig config = new OpenApiConfig();
-        config.setService(ShapeId.from("example#Banking"));
+        config.setService(ShapeId.from("smithy.examplestrait#Banking"));
         ObjectNode result = OpenApiConverter.create()
                 .config(config)
                 .convertToNode(model);

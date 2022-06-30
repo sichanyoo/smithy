@@ -42,7 +42,7 @@
             "in": "query",
             "style": "form",
             "schema": {
-              "$ref": "#/components/schemas/exampleMap"
+              "$ref": "#/components/schemas/ExampleMap"
             },
             "examples": {
               "Withdraw_example1": {
@@ -150,7 +150,7 @@
                     "value": {
                       "location": "Denver",
                       "bankName": "Chase",
-                      "atmRecording": "test"
+                      "atmRecording": "dGVzdHZpZGVv"
                     }
                   }
                 }
@@ -479,7 +479,7 @@
           }
         }
       },
-      "exampleMap": {
+      "ExampleMap": {
         "type": "object",
         "additionalProperties": {
           "type": "string"

@@ -200,10 +200,10 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
     /*
      * This method is used for converting the Smithy examples to OpenAPI examples for:
-     *  - operation's input structure member(s) with @httpLabel trait (path parameters).
-     *  - operation's input structure member(s) with @httpQuery / @httpQueryParams trait (query parameters).
-     *  - operation's input / output / error structure member(s) with @httpHeader trait (header parameters).
-     *  - operation's input / output / error structure member with @httpPayload trait (payload).
+     * [operation's input structure member(s) with @httpLabel trait (path parameters).] &
+     * [operation's input structure member(s) with @httpQuery / @httpQueryParams trait (query parameters).] &
+     * [operation's input / output / error structure member(s) with @httpHeader trait (header parameters).] &
+     * [operation's input / output / error structure member with @httpPayload trait (payload).]
      */
     private Map<String, ExampleObject> createExamples(Shape operationOrError,
                                                       HttpBinding binding,
@@ -285,8 +285,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     }
 
     /*
-     * This method is used for converting the Smithy examples to OpenAPI examples for:
-     *  - operation's input / output / error structure member(s) with no applied HTTP traits (HTTP message body).
+     * This method is used for converting the Smithy examples to OpenAPI examples for
+     * the operation's input / output / error structure member(s) with no applied HTTP traits (HTTP message body).
      */
     private Map<String, ExampleObject> createBodyExamples(Shape operationOrError,
                                                       List<HttpBinding> bindings,
