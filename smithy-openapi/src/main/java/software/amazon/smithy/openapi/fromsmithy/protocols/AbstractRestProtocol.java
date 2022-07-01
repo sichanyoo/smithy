@@ -322,7 +322,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                         && example.getError().get().getShapeId() == error.toShapeId()) {
                     // get members included in bindings
                     ObjectNode values = filter(bindings, example.getError().get().getContent());
-                    String name = operation.getId().getName() + "_example" + uniqueNum++;
+                    String name = operation.getId().getName() + "_example" + uniqueNum;
                     examples.put(name,
                             ExampleObject.builder()
                                     .summary(example.getTitle())
@@ -330,6 +330,8 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                                     .value(values)
                                     .build());
                 }
+                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
+                uniqueNum++;
             }
         }
         return examples;
