@@ -116,6 +116,15 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             MessageType messageType
     );
 
+
+    /**
+     * Converts the Node object to a StringNode object that contains the same data, but represented
+     * in the data representation format used by the protocol.
+     * E.g., for restXML protocol, values would be converted to a large String of XML value / object,
+     * escaping where necessary.
+     */
+    abstract Node transformSmithyValueToProtocolValue(Node values);
+
     @Override
     public Set<String> getProtocolRequestHeaders(Context<T> context, OperationShape operationShape) {
         Set<String> headers = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -230,7 +239,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                         examples.put(name, ExampleObject.builder()
                                 .summary(example.getTitle())
                                 .description(example.getDocumentation().orElse(""))
-                                .value(values)
+                                .value(transformSmithyValueToProtocolValue(values))
                                 .build());
                     }
                 }
@@ -268,7 +277,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     examples.put(name, ExampleObject.builder()
                             .summary(example.getTitle())
                             .description(example.getDocumentation().orElse(""))
-                            .value(values)
+                            .value(transformSmithyValueToProtocolValue(values))
                             .build());
                 }
             }
@@ -300,7 +309,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                         examples.put(name, ExampleObject.builder()
                                 .summary(example.getTitle())
                                 .description(example.getDocumentation().orElse(""))
-                                .value(values)
+                                .value(transformSmithyValueToProtocolValue(values))
                                 .build());
                     }
                 }
@@ -327,7 +336,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                             ExampleObject.builder()
                                     .summary(example.getTitle())
                                     .description(example.getDocumentation().orElse(""))
-                                    .value(values)
+                                    .value(transformSmithyValueToProtocolValue(values))
                                     .build());
                 }
                 uniqueNum++;
