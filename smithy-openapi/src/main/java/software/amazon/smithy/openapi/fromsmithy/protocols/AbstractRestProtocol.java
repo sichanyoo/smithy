@@ -118,7 +118,9 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
 
     /**
-     * Converts the Node object to a StringNode object that contains the same data, but represented
+     * Used for the value property of OpenAPI example objects.
+     * For protocols that do not use JSON as data-exchange format,
+     * converts the Node object to a StringNode object that contains the same data, but represented
      * in the data representation format used by the protocol.
      * E.g., for restXML protocol, values would be converted to a large String of XML value / object,
      * escaping where necessary.
