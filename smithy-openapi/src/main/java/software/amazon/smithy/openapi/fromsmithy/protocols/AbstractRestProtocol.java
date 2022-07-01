@@ -330,7 +330,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                                     .value(values)
                                     .build());
                 }
-                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                 uniqueNum++;
             }
         }
