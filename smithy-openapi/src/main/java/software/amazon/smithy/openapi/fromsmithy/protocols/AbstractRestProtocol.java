@@ -33,6 +33,7 @@ import software.amazon.smithy.model.knowledge.EventStreamInfo;
 import software.amazon.smithy.model.knowledge.HttpBinding;
 import software.amazon.smithy.model.knowledge.HttpBindingIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
+import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.node.StringNode;
 import software.amazon.smithy.model.pattern.SmithyPattern;
@@ -200,15 +201,10 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
     /*
      * This method is used for converting the Smithy examples to OpenAPI examples for:
-     * [operation's input structure member(s) with @httpLabel trait (path parameters).] &
-     * [operation's input structure member(s) with @httpQuery / @httpQueryParams trait (query parameters).] &
-     * [operation's input / output / error structure member(s) with @httpHeader trait (header parameters).] &
-     * [operation's input / output / error structure member with @httpPayload trait (payload).]
+     * path parameters, query parameters, header parameters, and payload.
      */
-    private Map<String, ExampleObject> createExamples(Shape operationOrError,
-                                                      HttpBinding binding,
-                                                      MessageType type,
-                                                      OperationShape operation) {
+    private Map<String, ExampleObject> createExamples(Shape operationOrError, HttpBinding binding,
+                                                      MessageType type, OperationShape operation) {
         if (type == MessageType.ERROR) {
             return createErrorExamples(operationOrError, binding, operation);
         } else {
@@ -220,23 +216,21 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
             if (examplesTrait.isPresent()) {
                 for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
                     ObjectNode inputOrOutput = type == MessageType.REQUEST ? example.getInput() : example.getOutput();
-                    // name for the example: operationName + "example" + uniqueNum
-                    // used by customer (if desired) to piece example input / output / error values
-                    // back together into one logical unit from the OpenAPI model, as in Smithy models.
-                    // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                     String name = operationOrError.getId().getName() + "_example" + uniqueNum++;
+
+                    Node values = inputOrOutput.getMember(binding.getMemberName())
+                                    .orElseThrow(() -> new OpenApiException(String.format(
+                                            "Unable to find example value for %s in [%s] example",
+                                            operationOrError.getId() + "$" + binding.getMemberName(),
+                                            example.getTitle())));
+
                     // this if condition is needed to avoid errors when converting examples of response.
                     if ((!example.getError().isPresent() || type == MessageType.REQUEST)
                             && inputOrOutput.containsMember(binding.getMemberName())) {
                         examples.put(name, ExampleObject.builder()
                                 .summary(example.getTitle())
                                 .description(example.getDocumentation().orElse(""))
-                                .value(inputOrOutput
-                                        .getMember(binding.getMemberName())
-                                        .orElseThrow(() -> new OpenApiException(String.format(
-                                                "Unable to find example value for %s in [%s] example",
-                                                operationOrError.getId() + "$" + binding.getMemberName(),
-                                                example.getTitle()))))
+                                .value(values)
                                 .build());
                     }
                 }
@@ -247,7 +241,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
 
     /*
      * Helper method for createExamples() method.
-     * Does exactly what creatExamples() does, but for ErrorExample structures.
      */
     private Map<String, ExampleObject> createErrorExamples(Shape error,
                                                            HttpBinding binding,
@@ -259,11 +252,13 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
         if (examplesTrait.isPresent()) {
             for (ExamplesTrait.Example example : examplesTrait.get().getExamples()) {
-                // name for the example: operationName + "example" + uniqueNum
-                // used by customer (if desired) to piece example input / output / error values
-                // back together into one logical unit from the OpenAPI model, as in Smithy models.
-                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                 String name = operation.getId().getName() + "_example" + uniqueNum++;
+                Node values = example.getError().get().getContent()
+                                .getMember(binding.getMemberName())
+                                .orElseThrow(() -> new OpenApiException(String.format(
+                                        "Unable to find example value for %s in [%s] example",
+                                        operation.getId() + "$" + binding.getMemberName(),
+                                        example.getTitle())));
                 // this has to be checked because an operation can have more than one error linked to it.
                 if (example.getError().isPresent()
                         && example.getError().get().getShapeId() == error.toShapeId()
@@ -271,12 +266,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     examples.put(name, ExampleObject.builder()
                             .summary(example.getTitle())
                             .description(example.getDocumentation().orElse(""))
-                            .value(example.getError().get().getContent()
-                                    .getMember(binding.getMemberName())
-                                    .orElseThrow(() -> new OpenApiException(String.format(
-                                            "Unable to find example value for %s in [%s] example",
-                                            operation.getId() + "$" + binding.getMemberName(),
-                                            example.getTitle()))))
+                            .value(values)
                             .build());
                 }
             }
@@ -285,13 +275,10 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
     }
 
     /*
-     * This method is used for converting the Smithy examples to OpenAPI examples for
-     * the operation's input / output / error structure member(s) with no applied HTTP traits (HTTP message body).
+     * This method is used for converting the Smithy examples to OpenAPI examples for non-payload HTTP message body.
      */
-    private Map<String, ExampleObject> createBodyExamples(Shape operationOrError,
-                                                      List<HttpBinding> bindings,
-                                                      MessageType type,
-                                                      OperationShape operation) {
+    private Map<String, ExampleObject> createBodyExamples(Shape operationOrError, List<HttpBinding> bindings,
+                                                      MessageType type, OperationShape operation) {
         if (type == MessageType.ERROR) {
             return createErrorBodyExamples(operationOrError, bindings, operation);
         } else {
@@ -305,11 +292,6 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                     // get members included in bindings
                     ObjectNode values = filter(bindings,
                             type == MessageType.REQUEST ? example.getInput() : example.getOutput());
-
-                    // name for the example: operationName + "example" + uniqueNum
-                    // used by customer (if desired) to piece example input / output / error members
-                    // back together into one unit.
-                    // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
                     String name = operationOrError.getId().getName() + "_example" + uniqueNum++;
                     // this if condition is needed to avoid errors when converting examples of response.
                     if (!example.getError().isPresent() || type == MessageType.REQUEST) {
@@ -325,15 +307,9 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
         }
     }
 
-    /*
-     * Helper method for createBodyExamples() method.
-     * Does exactly what creatBodyExamples() does, but for ErrorExample structures.
-     */
-    private Map<String, ExampleObject> createErrorBodyExamples(Shape error,
-                                                               List<HttpBinding> bindings,
+    private Map<String, ExampleObject> createErrorBodyExamples(Shape error, List<HttpBinding> bindings,
                                                                OperationShape operation) {
         Map<String, ExampleObject> examples = new TreeMap<>();
-
         // unique numbering for unique example names in OpenAPI.
         int uniqueNum = 1;
         Optional<ExamplesTrait> examplesTrait = operation.getTrait(ExamplesTrait.class);
@@ -344,11 +320,7 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                         && example.getError().get().getShapeId() == error.toShapeId()) {
                     // get members included in bindings
                     ObjectNode values = filter(bindings, example.getError().get().getContent());
-
-                    // name for the example: operationName + "example" + uniqueNum
-                    // used by customer (if desired) to piece example input / output / error members
-                    // back together into one unit.
-                    String name = operation.getId().getName() + "_example" + uniqueNum;
+                    String name = operation.getId().getName() + "_example" + uniqueNum++;
                     examples.put(name,
                             ExampleObject.builder()
                                     .summary(example.getTitle())
@@ -356,27 +328,21 @@ abstract class AbstractRestProtocol<T extends Trait> implements OpenApiProtocol<
                                     .value(values)
                                     .build());
                 }
-                // uniqueNum is incremented by one post-operation to ensure a unique example name for each example.
-                uniqueNum++;
             }
         }
         return examples;
     }
 
     /*
-     * Returns a modified copy of inputOrOutput with just the members bound to a HttpBinding trait.
+     * Returns a modified copy of [inputOrOutput] with just the members bound to a HttpBinding trait in [bindings].
      */
     private ObjectNode filter(List<HttpBinding> bindings, ObjectNode inputOrOutput) {
-        // this is what we want
         ObjectNode values = inputOrOutput;
-        // this what we dont want.
         ObjectNode tmp = inputOrOutput.toBuilder().build();
 
-        // remove members we want from tmp, leaving it with members we don't want.
         for (HttpBinding binding : bindings) {
             tmp = tmp.withoutMember(binding.getMemberName());
         }
-        // next, discard members in tmp from values, leaving values with only the members we want.
         for (StringNode key : tmp.getMembers().keySet()) {
             values = values.withoutMember(key.toString());
         }
