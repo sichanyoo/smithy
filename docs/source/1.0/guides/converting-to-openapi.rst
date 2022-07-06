@@ -804,6 +804,366 @@ Smithy will generate the following OpenAPI model:
         ]
     }
 
+----------------
+``@examples`` trait conversion
+----------------
+
+**\*Note:** As of 2022-07-05, ``@examples`` trait conversion in Smithy2OpenAPI converter only supports Smithy models
+that use ``@restJson1`` protocol.
+
+In Smithy, example values of input structure members and the corresponding
+output or error structure members for an operation are grouped together
+into one set of example values for an operation. Below are two example "units" of ``FooOperation``
+operation shape, which show this logical grouping.
+
+.. code-block:: smithy
+
+    apply FooOperation @examples(
+        [
+            {
+                title: "valid example",
+                documentation: "valid example doc",
+                input: {
+                    bar: "1234"
+                },
+                output: {
+                    baz: "5678"
+                },
+            },
+            {
+                title: "error example",
+                documentation: "error example doc",
+                input: {
+                    bar: "%$@!"
+                },
+                error: {
+                    shapeId: InvalidBar,
+                    content: {
+                        message: "ERROR: Invalid Bar Value."
+                    }
+                },
+            }
+        ]
+    )
+
+In contrast, example values in OpenAPI are scatted throughout the
+model, and there are more than one spot to place example values.
+Smithy2OpenAPI converts all example values from a Smithy model to an
+``examples`` field contained by the OpenAPI object the example values are for.
+The scattered example values can be pieced back together into one logical unit as
+in Smithy by using the following identifier:
+
+``operation_name + "_example" + uniqueNum``
+
+Where ``operation_name`` is the name of the operation the Smithy example was for,
+and ``uniqueNum`` is the unique identifying number that allows matching example values back into one unit.
+
+For example, if below is the contents of ``smithy-build.json`` file,
+
+.. code-block:: smithy
+
+    {
+        "version": "1.0",
+        "plugins": {
+            "openapi": {
+                "service": "example#Example",
+                "protocol": "aws.protocols#restJson1"
+            }
+        }
+    }
+
+and the Smithy model below is fed into Smithy2OpenAPI converter,
+
+.. code-block:: smithy
+
+    namespace example
+
+    // import the protocol to use for API
+    use aws.protocols#restJson1
+
+    // indicates that service Example uses REST Json 1 protocol
+    @restJson1
+    service Example {
+        version: "0000-00-00",
+        operations: [FooBar]
+    }
+
+    @idempotent
+    @http(method: "PUT", uri: "/test/{labelExample}", code: 200)
+    operation FooBar {
+        input: FooBarInput,
+        output: FooBarOutput,
+        errors: [FooBarError]
+    }
+
+    @input
+    structure FooBarInput {
+        // mapped to HTTP request header, in the format of:
+        // test: "VALUE_OF_headerInput"
+        @httpHeader("inputHeader")
+        headerInput: String,
+
+        // the label that goes into URI property of @http trait
+        // applied to service Example shape
+        // if labelExample is "resource", then resolved URI will be
+        // "/test/resource"
+        @required
+        @httpLabel
+        labelExample: String,
+
+        // the query string appended to end of URI property of @http trait
+        // applied to service Example shape in the format:
+        // paramName="VALUE_OF_param"
+        @httpQuery("queryParam")
+        param: String,
+
+        // any structure member without explicit http trait goes to
+        // HTTP request body.
+        foo: String
+    }
+
+    @output
+    structure FooBarOutput {
+        // mapped to HTTP response header, in the format of:
+        // responseHeader: "VALUE_OF_baz"
+        @httpHeader("responseHeader")
+        baz: String,
+
+        // any structure member without explicit http tag goes to
+        // HTTP response body.
+        bar: String
+    }
+
+    @error("client")
+    structure FooBarError {
+        message: String
+    }
+
+    apply FooBar @examples(
+      [
+          {
+               title: "routine valid example",
+               input: {
+                    headerInput: "X-Foo",
+                    labelExample: "dir",
+                    param: "now",
+                    foo: "exampleInput"
+               },
+               output: {
+                    baz: "yay",
+                    bar: "exampleOutput"
+               },
+          },
+
+          {
+               title: "error example",
+               input: {
+                    headerInput: "Y-Foo",
+                    labelExample: "src",
+                    param: "then",
+                    foo: "@$%#"
+               },
+               error: {
+                    shapeId: FooBarError,
+                    content: {
+                        message: "invalid 'foo'. Foo must be alphanumeric."
+                    }
+               },
+          }
+      ]
+    )
+
+...then the Smithy2OpenAPI converter will output this:
+
+.. code-block:: json
+
+    {
+        "openapi": "3.0.2",
+        "info": {
+            "title": "Example",
+            "version": "0000-00-00"
+        },
+        "paths": {
+            "/test/{labelExample}": {
+                "put": {
+                    "operationId": "FooBar",
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FooBarRequestContent"
+                                },
+                                "examples": {
+                                    "FooBar_example1": {
+                                        "summary": "routine valid example",
+                                        "description": "",
+                                        "value": {
+                                            "foo": "exampleInput"
+                                        }
+                                    },
+                                    "FooBar_example2": {
+                                        "summary": "error example",
+                                        "description": "",
+                                        "value": {
+                                            "foo": "@$%#"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "parameters": [
+                        {
+                            "name": "labelExample",
+                            "in": "path",
+                            "schema": {
+                                "type": "string"
+                            },
+                            "required": true,
+                            "examples": {
+                                "FooBar_example1": {
+                                    "summary": "routine valid example",
+                                    "description": "",
+                                    "value": "dir"
+                                },
+                                "FooBar_example2": {
+                                    "summary": "error example",
+                                    "description": "",
+                                    "value": "src"
+                                }
+                            }
+                        },
+                        {
+                            "name": "queryParam",
+                            "in": "query",
+                            "schema": {
+                                "type": "string"
+                            },
+                            "examples": {
+                                "FooBar_example1": {
+                                    "summary": "routine valid example",
+                                    "description": "",
+                                    "value": "now"
+                                },
+                                "FooBar_example2": {
+                                    "summary": "error example",
+                                    "description": "",
+                                    "value": "then"
+                                }
+                            }
+                        },
+                        {
+                            "name": "inputHeader",
+                            "in": "header",
+                            "schema": {
+                                "type": "string"
+                            },
+                            "examples": {
+                                "FooBar_example1": {
+                                    "summary": "routine valid example",
+                                    "description": "",
+                                    "value": "X-Foo"
+                                },
+                                "FooBar_example2": {
+                                    "summary": "error example",
+                                    "description": "",
+                                    "value": "Y-Foo"
+                                }
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "FooBar 200 response",
+                            "headers": {
+                                "responseHeader": {
+                                    "schema": {
+                                        "type": "string"
+                                    },
+                                    "examples": {
+                                        "FooBar_example1": {
+                                            "summary": "routine valid example",
+                                            "description": "",
+                                            "value": "yay"
+                                        }
+                                    }
+                                }
+                            },
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/FooBarResponseContent"
+                                    },
+                                    "examples": {
+                                        "FooBar_example1": {
+                                            "summary": "routine valid example",
+                                            "description": "",
+                                            "value": {
+                                                "bar": "exampleOutput"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "FooBarError 400 response",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/FooBarErrorResponseContent"
+                                    },
+                                    "examples": {
+                                        "FooBar_example2": {
+                                            "summary": "error example",
+                                            "description": "",
+                                            "value": {
+                                                "message": "invalid 'foo'. Foo must be alphanumeric."
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "FooBarErrorResponseContent": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "FooBarRequestContent": {
+                    "type": "object",
+                    "properties": {
+                        "foo": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "FooBarResponseContent": {
+                    "type": "object",
+                    "properties": {
+                        "bar": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+It should now be clear how example values can be pieced back together by using Ctrl+F / Cmd+F
+on the example identifier string.
+All example values from first Smithy example on the ``FooBar`` operation has ``FooBar_example1``
+as their unique identifier in the OpenAPI output. Same goes for second Smithy example on the ``FooBar`` operation,
+with ``FooBar_example2`` as their unique identifier.
 
 -----------------------------
 Amazon API Gateway extensions
